@@ -47,6 +47,7 @@ std::string SocketFnameIterator::GetNext() {
     if (amount < 0) DIE("read");
     if (amount == 0) return "";
     ret.resize(amount);
+    ret.shrink_to_fit();
     return ret;
 }
 

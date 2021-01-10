@@ -14,9 +14,7 @@
     snprintf(strname, sizeof(strname), __VA_ARGS__)
 
 template <typename P, typename D>
-std::unique_ptr<P, std::function<void(P*)>> MakeUnique(P* p, D deleter) {
-    return std::unique_ptr<P, std::function<void(P*)>>(p, deleter);
-}
+std::unique_ptr<P, std::function<void(P*)>> MakeUnique(P* p, D deleter);
 
 std::mutex* GlobalWriteLock();
 
@@ -30,4 +28,9 @@ void WriteLocked(FILE* stream, T... args) {
     mu->lock();
     fprintf(stream, std::forward<T>(args)...);
     mu->unlock();
+}
+
+template <typename P, typename D>
+std::unique_ptr<P, std::function<void(P*)>> MakeUnique(P* p, D deleter) {
+    return std::unique_ptr<P, std::function<void(P*)>>(p, deleter);
 }
