@@ -46,7 +46,7 @@ void Worker(
         std::string_view hashname,
         const std::function<HashStatus(std::string_view,
                                        std::string_view)>& task,
-        unsigned* ret) {
+        std::atomic<unsigned>* ret) {
     while (true) {
         const std::string cur = iterator->GetNext();
         if (cur.empty()) break;
@@ -176,23 +176,18 @@ int main(int argc, char* argv[]) {
 
     std::vector<std::thread> workers;
     workers.reserve(results.num_threads);
-    std::vector<unsigned> codes;
-    codes.reserve(results.num_threads);
+    std::atomic<unsigned> result;
 
     for (unsigned i = 0; i < results.num_threads; ++i) {
-        codes.emplace_back(0);
         workers.emplace_back(&Worker,
                              iterator.get(),
                              results.hash_fn,
                              results.fn,
-                             &codes.back());
+                             &result);
     }
 
     for (auto& thread : workers) thread.join();
 
-    const unsigned result =
-        std::reduce(codes.begin(), codes.end(), 0,
-                    [](unsigned memo, unsigned cur) { return memo | cur; });
-    if (results.report_all_errors) return result;
-    return result & static_cast<unsigned>(HashStatus::MISMATCH);
+    if (results.report_all_errors) return result.load();
+    return result.load() & static_cast<unsigned>(HashStatus::MISMATCH);
 }
