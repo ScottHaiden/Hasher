@@ -111,6 +111,7 @@ struct ArgResults {
     int num_threads;
     int index;
     bool report_all_errors;
+    const char* hash_fn;
 };
 
 void ShowHelp(char* progname) {
@@ -118,6 +119,7 @@ void ShowHelp(char* progname) {
     printf("\n");
     printf("\t-h:     Show this help\n");
     printf("\t-c:     Check hashes\n");
+    printf("\t-C:     Set hash function\n");
     printf("\t-r:     Reset hashes (remove hash from file's metadata)\n");
     printf("\t-s:     Set hash (find hash and set it in file's metadata)\n");
     printf("\t-p:     Print hash (create a checksum file)\n");
@@ -128,20 +130,23 @@ void ShowHelp(char* progname) {
 }
 
 ArgResults ParseArgs(int argc, char* const* argv) {
+    static constexpr char kDefaultHash[] = "sha512";
     ArgResults ret = {
         .fn = nullptr,
         .num_threads = -1,
         .index = 0,
         .report_all_errors = false,
+        .hash_fn = &kDefaultHash[0],
     };
 
     while (true) {
-        switch (getopt(argc, argv, "chrspt:TeE")) {
+        switch (getopt(argc, argv, "chrspt:TeEC:")) {
             case 'T': ret.num_threads = -1;           continue;
             case 'c': ret.fn = &CheckHash;            continue;
             case 'p': ret.fn = &PrintHash;            continue;
             case 'r': ret.fn = &ResetHash;            continue;
             case 's': ret.fn = &ApplyHash;            continue;
+            case 'C': ret.hash_fn = optarg;           continue;
             case 't': ret.num_threads = atoi(optarg); continue;
             case 'e': ret.report_all_errors = true;   continue;
             case 'E': ret.report_all_errors = false;  continue;
@@ -176,8 +181,11 @@ int main(int argc, char* argv[]) {
 
     for (unsigned i = 0; i < results.num_threads; ++i) {
         codes.emplace_back(0);
-        workers.emplace_back(
-                &Worker, iterator.get(), "sha512", results.fn, &codes.back());
+        workers.emplace_back(&Worker,
+                             iterator.get(),
+                             results.hash_fn,
+                             results.fn,
+                             &codes.back());
     }
 
     for (auto& thread : workers) thread.join();
