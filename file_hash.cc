@@ -104,17 +104,24 @@ bool FileHash::operator==(const FileHash& other) const {
     return true;
 }
 
-void FileHash::SetHashXattr() const {
+int FileHash::SetHashXattr() const {
     LOCAL_STRING(attrname, "user.hash.%s", hash_name_.data());
 
     if (fsetxattr(fd_, attrname, hash_.data(), hash_.size(), 0) < 0) {
         if (errno != EACCES) DIE("fsetxattr");
+        return 1;
     }
+
+    return 0;
 }
 
-void FileHash::ClearHashXattr() const {
+int FileHash::ClearHashXattr() const {
     LOCAL_STRING(attrname, "user.hash.%s", hash_name_.data());
-    if (fremovexattr(fd_, attrname) && errno != ENODATA) DIE("fremovexattr");
+    if (fremovexattr(fd_, attrname)) {
+        if (errno == ENODATA) return 1;
+        DIE("fremovexattr");
+    }
+    return 0;
 }
 
 std::pair<std::unique_ptr<char, std::function<void(char*)>>, size_t>

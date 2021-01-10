@@ -21,9 +21,8 @@ class FileHash {
     std::string HashString() const;
     const std::vector<unsigned char>& HashRaw() const;
 
-    // TODO(scotthaiden): Have these return error codes instead.
-    void SetHashXattr() const;
-    void ClearHashXattr() const;
+    int SetHashXattr() const;
+    int ClearHashXattr() const;
 
     bool operator==(const FileHash& other) const;
 

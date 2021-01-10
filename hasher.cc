@@ -42,7 +42,10 @@ HashStatus ApplyHash(std::string_view fname, std::string_view hashname) {
     }
 
     auto fresh = std::move(file).HashFileContents();
-    fresh.SetHashXattr();
+    if (fresh.SetHashXattr()) {
+        WriteLocked(stderr, "Failed to write xattr to %s\n", fname.data());
+        return HashStatus::ERROR;
+    }
     WriteLocked(stdout, "%s  %s\n", fresh.HashString().data(), fname.data());
     return HashStatus::OK;
 }
@@ -74,7 +77,11 @@ HashStatus PrintHash(std::string_view fname, std::string_view hashname) {
 }
 
 HashStatus ResetHash(std::string_view fname, std::string_view hashname) {
-    FileHash(fname, hashname).ClearHashXattr();
+    FileHash file(fname, hashname);
+    if (file.ClearHashXattr()) {
+        WriteLocked(stderr, "Failed to reset hash on %s\n", fname.data());
+        return HashStatus::ERROR;
+    }
     WriteLocked(stdout, "Resetting hash on %s\n", fname.data());
     return HashStatus::OK;
 }
