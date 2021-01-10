@@ -112,7 +112,13 @@ void FileHash::SetHashXattr() const {
     }
 }
 
-std::pair<std::unique_ptr<char, std::function<void(char*)>>, size_t> Mmap(int fd) {
+void FileHash::ClearHashXattr() const {
+    LOCAL_STRING(attrname, "user.hash.%s", hash_name_.data());
+    if (fremovexattr(fd_, attrname) && errno != ENODATA) DIE("fremovexattr");
+}
+
+std::pair<std::unique_ptr<char, std::function<void(char*)>>, size_t>
+Mmap(int fd) {
     struct stat sb;
     if (fstat(fd, &sb) < 0) DIE("fstat");
     const size_t file_len = sb.st_size;
