@@ -8,6 +8,12 @@
 #include <thread>
 #include <vector>
 
+enum class HashStatus : unsigned {
+    OK = 0,
+    MISMATCH = (1 << 0),
+    ERROR = (1 << 1),
+};
+
 class FnameIterator {
   public:
     virtual ~FnameIterator() = default;
@@ -36,34 +42,37 @@ class AtomicFnameIterator : public FnameIterator {
 void Worker(
         FnameIterator* iterator,
         std::string_view hashname,
-        const std::function<void(std::string_view, std::string_view)>& task) {
+        const std::function<HashStatus(std::string_view,
+                                       std::string_view)>& task,
+        unsigned* ret) {
     while (true) {
         const std::string cur = iterator->GetNext();
         if (cur.empty()) break;
-        task(cur, hashname);
+        *ret |= static_cast<unsigned>(task(cur, hashname));
     }
 }
 
-void ApplyHash(std::string_view fname, std::string_view hashname) {
+HashStatus ApplyHash(std::string_view fname, std::string_view hashname) {
     auto file = FileHash(fname, hashname).ReadFileHashXattr();
     if (!file.HashRaw().empty()) {
         LOCAL_STRING(line, "skipping %s (already has hash)", fname.data());
         puts(line);
-        return;
+        return HashStatus::ERROR;
     }
 
     auto fresh = std::move(file).HashFileContents();
     fresh.SetHashXattr();
     LOCAL_STRING(hashline, "%s  %s", fresh.HashString().data(), fname.data());
     puts(hashline);
+    return HashStatus::OK;
 }
 
-void CheckHash(std::string_view fname, std::string_view hashname) {
+HashStatus CheckHash(std::string_view fname, std::string_view hashname) {
     auto xattr_file = FileHash(fname, hashname).ReadFileHashXattr();
     if (xattr_file.HashRaw().empty()) {
         LOCAL_STRING(line, "skipping %s (missing hash)", fname.data());
         puts(line);
-        return;
+        return HashStatus::ERROR;
     }
     const auto rawhash = xattr_file.HashRaw();
 
@@ -71,17 +80,18 @@ void CheckHash(std::string_view fname, std::string_view hashname) {
     if (actual.HashRaw() == rawhash) {
         LOCAL_STRING(line, "%s: ok", fname.data());
         puts(line);
-        return;
+        return HashStatus::OK;
     }
 
     LOCAL_STRING(line, "%s: FAILED", fname.data());
     puts(line);
+    return HashStatus::MISMATCH;
 }
 
 int main(int argc, char* argv[]) {
     AtomicFnameIterator fn(&argv[1]);
+    unsigned result = 0;
+    Worker(&fn, "sha512", &CheckHash, &result);
 
-    Worker(&fn, "sha512", &CheckHash);
-
-    return EXIT_SUCCESS;
+    return result;
 }
