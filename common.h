@@ -5,6 +5,7 @@
 
 #include <functional>
 #include <memory>
+#include <mutex>
 
 #define DIE(msg) do { perror(msg); exit(EXIT_FAILURE); } while (0)
 #define QUIT(...) do { printf(__VA_ARGS__); exit(EXIT_FAILURE); } while (0)
@@ -15,4 +16,18 @@
 template <typename P, typename D>
 std::unique_ptr<P, std::function<void(P*)>> MakeUnique(P* p, D deleter) {
     return std::unique_ptr<P, std::function<void(P*)>>(p, deleter);
+}
+
+std::mutex* GlobalWriteLock();
+
+template <typename... T>
+void WriteLocked(FILE* stream, T... args);
+
+// Implementation details
+template <typename... T>
+void WriteLocked(FILE* stream, T... args) {
+    auto* const mu = GlobalWriteLock();
+    mu->lock();
+    fprintf(stream, std::forward<T>(args)...);
+    mu->unlock();
 }

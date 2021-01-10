@@ -8,51 +8,17 @@
 #include <unistd.h>
 #include <vector>
 
+#include <sys/socket.h>
+#include <sys/wait.h>
+
 #include "common.h"
+#include "utils.h"
 #include "file_hash.h"
 
 enum class HashStatus : unsigned {
     OK = 0,
     MISMATCH = (1 << 0),
     ERROR = (1 << 1),
-};
-
-class FnameIterator {
-  public:
-    virtual ~FnameIterator() = default;
-    virtual std::string GetNext() = 0;
-};
-
-std::mutex* GlobalWriteLock() {
-    static std::mutex mu;
-    return &mu;
-}
-
-template <typename... T>
-void WriteLocked(FILE* stream, T... args) {
-    auto* const mu = GlobalWriteLock();
-    mu->lock();
-    fprintf(stream, std::forward<T>(args)...);
-    mu->unlock();
-}
-
-class AtomicFnameIterator : public FnameIterator {
-  public:
-    ~AtomicFnameIterator() override = default;
-    AtomicFnameIterator(char** first) : cur_(first) {}
-
-    std::string GetNext() override {
-        char** ret = nullptr;
-        while (true) {
-            ret = cur_.load();
-            if (!*ret) return "";
-            if (cur_.compare_exchange_weak(ret, ret + 1)) break;
-        }
-        return std::string(*ret);
-    }
-    
-  private:
-    std::atomic<char**> cur_;
 };
 
 void Worker(
@@ -84,7 +50,7 @@ HashStatus ApplyHash(std::string_view fname, std::string_view hashname) {
 HashStatus CheckHash(std::string_view fname, std::string_view hashname) {
     auto xattr_file = FileHash(fname, hashname).ReadFileHashXattr();
     if (xattr_file.HashRaw().empty()) {
-        WriteLocked(stdout, "skipping %s (missing hash)", fname.data());
+        WriteLocked(stdout, "skipping %s (missing hash)\n", fname.data());
         return HashStatus::ERROR;
     }
     const auto rawhash = xattr_file.HashRaw();
@@ -119,6 +85,7 @@ struct ArgResults {
     int index;
     bool report_all_errors;
     const char* hash_fn;
+    bool recurse;
 };
 
 void ShowHelp(char* progname) {
@@ -144,15 +111,17 @@ ArgResults ParseArgs(int argc, char* const* argv) {
         .index = 0,
         .report_all_errors = false,
         .hash_fn = &kDefaultHash[0],
+        .recurse = false,
     };
 
     while (true) {
-        switch (getopt(argc, argv, "chrspt:TeEC:")) {
+        switch (getopt(argc, argv, "chrspt:TeEC:R")) {
             case 'T': ret.num_threads = -1;           continue;
             case 'c': ret.fn = &CheckHash;            continue;
             case 'p': ret.fn = &PrintHash;            continue;
             case 'r': ret.fn = &ResetHash;            continue;
             case 's': ret.fn = &ApplyHash;            continue;
+            case 'R': ret.recurse = true;             continue;
             case 'C': ret.hash_fn = optarg;           continue;
             case 't': ret.num_threads = atoi(optarg); continue;
             case 'e': ret.report_all_errors = true;   continue;
@@ -178,8 +147,15 @@ int main(int argc, char* argv[]) {
     auto results = ParseArgs(argc, &argv[0]);
     if (!results.fn) return 1;
 
-    auto iterator =
-        std::make_unique<AtomicFnameIterator>(&argv[results.index]);
+    std::unique_ptr<FnameIterator> iterator;
+    if (results.recurse) {
+        auto* const it = new SocketFnameIterator();
+        iterator.reset(it);
+        it->Recurse();
+    } else {
+        iterator = std::make_unique<AtomicFnameIterator>(&argv[results.index]);
+    }
+
 
     std::vector<std::thread> workers;
     workers.reserve(results.num_threads);

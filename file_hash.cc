@@ -107,8 +107,8 @@ bool FileHash::operator==(const FileHash& other) const {
 void FileHash::SetHashXattr() const {
     LOCAL_STRING(attrname, "user.hash.%s", hash_name_.data());
 
-    if (fsetxattr(fd_, attrname, hash_.data(), hash_.size(), 0)) {
-        DIE("fsetxattr");
+    if (fsetxattr(fd_, attrname, hash_.data(), hash_.size(), 0) < 0) {
+        if (errno != EACCES) DIE("fsetxattr");
     }
 }
 
