@@ -1,6 +1,6 @@
 CXX := c++
 CXXFLAGS += -pthread -std=c++20
-LDFLAGS += -lcrypto
+LDFLAGS += -lcrypto -fpic -pie
 
 .PHONY: all clean
 
