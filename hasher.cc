@@ -1,4 +1,5 @@
 #include <atomic>
+#include <mutex>
 #include <iostream>
 #include <numeric>
 #include <stdlib.h>
@@ -21,6 +22,19 @@ class FnameIterator {
     virtual ~FnameIterator() = default;
     virtual std::string GetNext() = 0;
 };
+
+std::mutex* GlobalWriteLock() {
+    static std::mutex mu;
+    return &mu;
+}
+
+template <typename... T>
+void WriteLocked(FILE* stream, T... args) {
+    auto* const mu = GlobalWriteLock();
+    mu->lock();
+    fprintf(stream, std::forward<T>(args)...);
+    mu->unlock();
+}
 
 class AtomicFnameIterator : public FnameIterator {
   public:
@@ -57,36 +71,31 @@ void Worker(
 HashStatus ApplyHash(std::string_view fname, std::string_view hashname) {
     auto file = FileHash(fname, hashname).ReadFileHashXattr();
     if (!file.HashRaw().empty()) {
-        LOCAL_STRING(line, "skipping %s (already has hash)", fname.data());
-        puts(line);
+        WriteLocked(stderr, "skipping %s (already has hash)\n", fname.data());
         return HashStatus::ERROR;
     }
 
     auto fresh = std::move(file).HashFileContents();
     fresh.SetHashXattr();
-    LOCAL_STRING(hashline, "%s  %s", fresh.HashString().data(), fname.data());
-    puts(hashline);
+    WriteLocked(stdout, "%s  %s\n", fresh.HashString().data(), fname.data());
     return HashStatus::OK;
 }
 
 HashStatus CheckHash(std::string_view fname, std::string_view hashname) {
     auto xattr_file = FileHash(fname, hashname).ReadFileHashXattr();
     if (xattr_file.HashRaw().empty()) {
-        LOCAL_STRING(line, "skipping %s (missing hash)", fname.data());
-        puts(line);
+        WriteLocked(stdout, "skipping %s (missing hash)", fname.data());
         return HashStatus::ERROR;
     }
     const auto rawhash = xattr_file.HashRaw();
 
     auto actual = std::move(xattr_file).HashFileContents();
     if (actual.HashRaw() == rawhash) {
-        LOCAL_STRING(line, "%s: ok", fname.data());
-        puts(line);
+        WriteLocked(stdout, "%s: OK\n", fname.data());
         return HashStatus::OK;
     }
 
-    LOCAL_STRING(line, "%s: FAILED", fname.data());
-    puts(line);
+    WriteLocked(stdout, "%s: FAILED\n", fname.data());
     return HashStatus::MISMATCH;
 }
 
@@ -94,15 +103,13 @@ HashStatus PrintHash(std::string_view fname, std::string_view hashname) {
     auto xattr_file = FileHash(fname, hashname).ReadFileHashXattr();
     if (xattr_file.HashRaw().empty()) return HashStatus::ERROR;
 
-    LOCAL_STRING(line, "%s  %s", xattr_file.HashString().data(), fname.data());
-    puts(line);
+    WriteLocked(stdout, "%s  %s", xattr_file.HashString().data(), fname.data());
     return HashStatus::OK;
 }
 
 HashStatus ResetHash(std::string_view fname, std::string_view hashname) {
     FileHash(fname, hashname).ClearHashXattr();
-    LOCAL_STRING(line, "Resetting hash on %s", fname.data());
-    puts(line);
+    WriteLocked(stdout, "Resetting hash on %s\n", fname.data());
     return HashStatus::OK;
 }
 
