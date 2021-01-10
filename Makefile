@@ -6,7 +6,7 @@ LDFLAGS += -lcrypto
 
 all: hasher
 
-hasher: hasher.cc
+hasher: hasher.cc file_hash.o
 
 clean:
-	rm -f hasher
+	rm -f hasher *.o
