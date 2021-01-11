@@ -129,6 +129,7 @@ Mmap(int fd) {
     struct stat sb;
     if (fstat(fd, &sb) < 0) DIE("fstat");
     const size_t file_len = sb.st_size;
+    if (!file_len) return {nullptr, 0};
 
     void* const mapped = mmap(nullptr, file_len, PROT_READ, MAP_SHARED, fd, 0);
     if (mapped == MAP_FAILED) DIE("mmap");

@@ -68,7 +68,7 @@ void SocketFnameIterator::Recurse() {
 
     if (nftw("./", +[](const char* fpath, const struct stat* sb,
                               int typeflag, struct FTW*) {
-        if (typeflag != FTW_F) return 0;
+        if (!S_ISREG(sb->st_mode)) return 0;
         const std::string_view path_view(fpath);
         const ssize_t amount =
             write(fileno(stdout), path_view.data(), path_view.size());
