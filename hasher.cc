@@ -72,7 +72,7 @@ HashStatus PrintHash(std::string_view fname, std::string_view hashname) {
     auto xattr_file = FileHash(fname, hashname).ReadFileHashXattr();
     if (xattr_file.HashRaw().empty()) return HashStatus::ERROR;
 
-    WriteLocked(stdout, "%s  %s", xattr_file.HashString().data(), fname.data());
+    WriteLocked(stdout, "%s  %s\n", xattr_file.HashString().data(), fname.data());
     return HashStatus::OK;
 }
 
