@@ -5,6 +5,7 @@
 #include <atomic>
 #include <mutex>
 #include <string>
+#include <thread>
 
 class FnameIterator {
   public:
@@ -33,5 +34,5 @@ class SocketFnameIterator : public FnameIterator {
   private:
     int rfd_;
     int wfd_;
-    pid_t child_;
+    std::thread thread_;
 };

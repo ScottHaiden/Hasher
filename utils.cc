@@ -1,8 +1,11 @@
-#include <ftw.h>
+#include <fts.h>
 #include <stdlib.h>
-#include <unistd.h>
+#include <string.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include <sys/wait.h>
+#include <unistd.h>
 
 #include <mutex>
 #include <atomic>
@@ -23,17 +26,9 @@ std::string AtomicFnameIterator::GetNext() {
     return std::string(*ret);
 }
 
-SocketFnameIterator::~SocketFnameIterator() {
-    if (!child_) return;
-    int status = 0;
-    const pid_t waited = waitpid(child_, &status, 0);
-    if (waited < 0) DIE("waitpid");
-    if (waited != child_) {
-        QUIT("Waited wrong child %d vs %d\n", waited, child_);
-    }
-}
+SocketFnameIterator::~SocketFnameIterator() { thread_.join(); }
 
-SocketFnameIterator::SocketFnameIterator() : child_(0) {
+SocketFnameIterator::SocketFnameIterator() {
     int fds[2];
     if (socketpair(AF_UNIX, SOCK_SEQPACKET, 0, fds) < 0) DIE("socketpair");
     rfd_ = fds[0];
@@ -52,33 +47,28 @@ std::string SocketFnameIterator::GetNext() {
 }
 
 void SocketFnameIterator::Recurse() {
-    const pid_t pid = fork();
-    if (pid < 0) DIE("fork");
-    if (pid > 0) {
-        child_ = pid;
-        if (close(wfd_)) DIE("close in parent");
-        return;
-    }
+    constexpr char kCurDir[] = ".";
+    thread_ = std::thread([this, kCurDir]() {
+        char cur_dir[sizeof(kCurDir)];
+        strcpy(cur_dir, kCurDir);
+        char* dir_list[] = {&cur_dir[0], nullptr};
 
-    const int fd = dup2(wfd_, fileno(stdout));
-    if (fd < 0) DIE("dup2");
-    if (fd != fileno(stdout)) {
-        QUIT("Mismatched fds: %d vs %d\n", fileno(stdout), wfd_);
-    }
+        auto fts = MakeUnique(fts_open(dir_list, FTS_NOCHDIR, nullptr),
+                              &fts_close);
+        if (fts == nullptr) DIE("fts_open");
 
-    if (nftw("./", +[](const char* fpath, const struct stat* sb,
-                              int typeflag, struct FTW*) {
-        if (!S_ISREG(sb->st_mode)) return 0;
-        const std::string_view path_view(fpath);
-        const ssize_t amount =
-            write(fileno(stdout), path_view.data(), path_view.size());
-        if (amount < 0) DIE("write");
-        if (amount != path_view.size()) {
-            QUIT("write messed up: %zd vs %zd\n", amount, path_view.size());
+        while (true) {
+            auto* const cur = fts_read(fts.get());
+            if (cur == nullptr) break;
+            if (!S_ISREG(cur->fts_statp->st_mode)) continue;
+            const size_t len = strlen(cur->fts_path);
+            const ssize_t written = write(wfd_, cur->fts_path, len);
+            if (written < 0) DIE("write");
+            if (written != len) {
+                QUIT("wrote wrong amount (%zu vs %zd)", written, len);
+            }
         }
-        return 0;
-    }, 1 << 10, FTW_PHYS) < 0) DIE("nftw");
 
-    if (close(wfd_)) DIE("close in child");
-    exit(EXIT_SUCCESS);
+        if (close(wfd_)) DIE("close");
+    });
 }
