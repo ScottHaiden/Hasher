@@ -156,7 +156,7 @@ int main(int argc, char* argv[]) {
 
     std::unique_ptr<FnameIterator> iterator;
     if (results.recurse) {
-        auto* const it = new SocketFnameIterator();
+        auto* const it = new SocketFnameIterator(&argv[results.index]);
         iterator.reset(it);
         it->Recurse();
     } else {

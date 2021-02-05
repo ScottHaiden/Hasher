@@ -13,6 +13,14 @@
 #include "common.h"
 #include "utils.h"
 
+namespace {
+char** DefaultDirectories() {
+    static char kDot[] = ".";
+    static char* kDirectories[] = {kDot, nullptr};
+    return kDirectories;
+}
+}
+
 AtomicFnameIterator::~AtomicFnameIterator() = default;
 AtomicFnameIterator::AtomicFnameIterator(char** first) : cur_(first) {}
 
@@ -28,7 +36,8 @@ std::string AtomicFnameIterator::GetNext() {
 
 SocketFnameIterator::~SocketFnameIterator() { thread_.join(); }
 
-SocketFnameIterator::SocketFnameIterator() {
+SocketFnameIterator::SocketFnameIterator(char** directories)
+    : directories_(*directories ? directories : DefaultDirectories()) {
     int fds[2];
     if (socketpair(AF_UNIX, SOCK_SEQPACKET, 0, fds) < 0) DIE("socketpair");
     rfd_ = fds[0];
@@ -47,13 +56,8 @@ std::string SocketFnameIterator::GetNext() {
 }
 
 void SocketFnameIterator::Recurse() {
-    constexpr char kCurDir[] = ".";
-    thread_ = std::thread([this, kCurDir]() {
-        char cur_dir[sizeof(kCurDir)];
-        strcpy(cur_dir, kCurDir);
-        char* dir_list[] = {&cur_dir[0], nullptr};
-
-        auto fts = MakeUnique(fts_open(dir_list, FTS_NOCHDIR, nullptr),
+    thread_ = std::thread([this]() {
+        auto fts = MakeUnique(fts_open(directories_, FTS_NOCHDIR, nullptr),
                               &fts_close);
         if (fts == nullptr) DIE("fts_open");
 

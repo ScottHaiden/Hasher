@@ -27,11 +27,12 @@ class AtomicFnameIterator : public FnameIterator {
 class SocketFnameIterator : public FnameIterator {
   public:
     ~SocketFnameIterator() override;
-    SocketFnameIterator();
+    explicit SocketFnameIterator(char** directories);
     std::string GetNext() override;
     void Recurse();
 
   private:
+    char** const directories_;
     int rfd_;
     int wfd_;
     std::thread thread_;
