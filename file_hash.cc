@@ -140,8 +140,6 @@ Mmap(int fd) {
 
     auto ptr = MakeUnique(static_cast<char*>(mapped), std::move(cleanup));
 
-    if (madvise(ptr.get(), file_len, MADV_WILLNEED)) DIE("madvise");
-
     return {std::move(ptr), file_len};
 }
 
