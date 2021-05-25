@@ -46,7 +46,7 @@ FileHash&& FileHash::HashFileContents() && {
     return std::move(HashFileContents());
 }
 FileHash& FileHash::HashFileContents() & {
-    const auto& [file_data, file_len] = Mmap(fd_);
+    const auto [file_data, file_len] = Mmap(fd_);
 
     auto* const md = EVP_get_digestbyname(hash_name_.data());
     if (md == nullptr) QUIT("Invalid digest name '%s'\n", hash_name_.data());
