@@ -25,9 +25,8 @@ void WriteLocked(FILE* stream, T... args);
 template <typename... T>
 void WriteLocked(FILE* stream, T... args) {
     auto* const mu = GlobalWriteLock();
-    mu->lock();
+    const std::lock_guard<std::mutex> l(*mu);
     fprintf(stream, std::forward<T>(args)...);
-    mu->unlock();
 }
 
 template <typename P, typename D>
