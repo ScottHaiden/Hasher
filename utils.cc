@@ -7,8 +7,11 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-#include <mutex>
+#include <array>
 #include <atomic>
+#include <memory>
+#include <mutex>
+#include <thread>
 
 #include "common.h"
 #include "utils.h"
@@ -19,7 +22,35 @@ char** DefaultDirectories() {
     static char* kDirectories[] = {kDot, nullptr};
     return kDirectories;
 }
-}
+
+class AtomicFnameIterator : public FnameIterator {
+  public:
+    ~AtomicFnameIterator() override;
+    AtomicFnameIterator(char** first);
+
+    std::string GetNext() override;
+    void Start() override;
+    
+  private:
+    std::atomic<char**> cur_;
+};
+
+class SocketFnameIterator : public FnameIterator {
+  public:
+    ~SocketFnameIterator() override;
+    explicit SocketFnameIterator(char** directories);
+    std::string GetNext() override;
+    void Start() override;
+
+  private:
+    int rfd() const;
+    int wfd() const;
+
+    char** const directories_;
+    const std::array<int, 2> socket_fds_;
+
+    std::thread thread_;
+};
 
 AtomicFnameIterator::~AtomicFnameIterator() = default;
 AtomicFnameIterator::AtomicFnameIterator(char** first) : cur_(first) {}
@@ -39,17 +70,17 @@ void AtomicFnameIterator::Start() {}
 SocketFnameIterator::~SocketFnameIterator() { thread_.join(); }
 
 SocketFnameIterator::SocketFnameIterator(char** directories)
-    : directories_(*directories ? directories : DefaultDirectories()) {
-    int fds[2];
-    if (socketpair(AF_UNIX, SOCK_SEQPACKET, 0, fds) < 0) DIE("socketpair");
-    rfd_ = fds[0];
-    wfd_ = fds[1];
-}
+    : directories_(*directories ? directories : DefaultDirectories()),
+      socket_fds_([]() {
+        int fds[2];
+        if (socketpair(AF_UNIX, SOCK_SEQPACKET, 0, fds)) DIE("socketpair");
+        return std::array<int, 2>{fds[0], fds[1]};
+      }()) {}
 
 std::string SocketFnameIterator::GetNext() {
     std::string ret;
     ret.resize(4096);
-    const int amount = read(rfd_, ret.data(), ret.size());
+    const int amount = read(rfd(), ret.data(), ret.size());
     if (amount < 0) DIE("read");
     if (amount == 0) return "";
     ret.resize(amount);
@@ -68,13 +99,23 @@ void SocketFnameIterator::Start() {
             if (cur == nullptr) break;
             if (!S_ISREG(cur->fts_statp->st_mode)) continue;
             const size_t len = strlen(cur->fts_path);
-            const ssize_t written = write(wfd_, cur->fts_path, len);
+            const ssize_t written = write(wfd(), cur->fts_path, len);
             if (written < 0) DIE("write");
             if (written != len) {
                 QUIT("wrote wrong amount (%zu vs %zd)", written, len);
             }
         }
 
-        if (close(wfd_)) DIE("close");
+        if (close(wfd())) DIE("close");
     });
+}
+int SocketFnameIterator::rfd() const { return socket_fds_[0]; }
+int SocketFnameIterator::wfd() const { return socket_fds_[1]; }
+}
+
+// static
+std::unique_ptr<FnameIterator> FnameIterator::GetInstance(
+        bool recurse, char** args) {
+    if (recurse) return std::make_unique<SocketFnameIterator>(args);
+    return std::make_unique<AtomicFnameIterator>(args);
 }

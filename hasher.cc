@@ -154,12 +154,8 @@ int main(int argc, char* argv[]) {
     auto results = ParseArgs(argc, &argv[0]);
     if (!results.fn) return 1;
 
-    std::unique_ptr<FnameIterator> iterator;
-    if (results.recurse) {
-        iterator = std::make_unique<SocketFnameIterator>(&argv[results.index]);
-    } else {
-        iterator = std::make_unique<AtomicFnameIterator>(&argv[results.index]);
-    }
+    auto iterator =
+        FnameIterator::GetInstance(results.recurse, &argv[results.index]);
     iterator->Start();
 
     std::vector<std::thread> workers;
