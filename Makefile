@@ -1,5 +1,6 @@
+ARCH := native
 CXX := c++
-CXXFLAGS := -pthread -std=c++20 -O3 -pipe -march=native -mtune=native -flto
+CXXFLAGS := -pthread -std=c++20 -O3 -pipe -march=$(ARCH) -mtune=$(ARCH) -flto
 LDFLAGS := -lcrypto -fpic -pie
 
 .PHONY: all clean
