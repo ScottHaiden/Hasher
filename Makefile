@@ -1,5 +1,5 @@
 CXX := c++
-CXXFLAGS := -pthread -std=c++20 -O3 -pipe -march=native -mtune=native
+CXXFLAGS := -pthread -std=c++20 -O3 -pipe -march=native -mtune=native -flto
 LDFLAGS := -lcrypto -fpic -pie
 
 .PHONY: all clean

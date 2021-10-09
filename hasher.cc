@@ -156,13 +156,11 @@ int main(int argc, char* argv[]) {
 
     std::unique_ptr<FnameIterator> iterator;
     if (results.recurse) {
-        auto* const it = new SocketFnameIterator(&argv[results.index]);
-        iterator.reset(it);
-        it->Recurse();
+        iterator = std::make_unique<SocketFnameIterator>(&argv[results.index]);
     } else {
         iterator = std::make_unique<AtomicFnameIterator>(&argv[results.index]);
     }
-
+    iterator->Start();
 
     std::vector<std::thread> workers;
     workers.reserve(results.num_threads);

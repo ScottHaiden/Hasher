@@ -11,6 +11,7 @@ class FnameIterator {
   public:
     virtual ~FnameIterator() = default;
     virtual std::string GetNext() = 0;
+    virtual void Start() = 0;
 };
 
 class AtomicFnameIterator : public FnameIterator {
@@ -19,6 +20,7 @@ class AtomicFnameIterator : public FnameIterator {
     AtomicFnameIterator(char** first);
 
     std::string GetNext() override;
+    void Start() override;
     
   private:
     std::atomic<char**> cur_;
@@ -29,7 +31,7 @@ class SocketFnameIterator : public FnameIterator {
     ~SocketFnameIterator() override;
     explicit SocketFnameIterator(char** directories);
     std::string GetNext() override;
-    void Recurse();
+    void Start() override;
 
   private:
     char** const directories_;

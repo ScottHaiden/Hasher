@@ -34,6 +34,8 @@ std::string AtomicFnameIterator::GetNext() {
     return std::string(*ret);
 }
 
+void AtomicFnameIterator::Start() {}
+
 SocketFnameIterator::~SocketFnameIterator() { thread_.join(); }
 
 SocketFnameIterator::SocketFnameIterator(char** directories)
@@ -55,7 +57,7 @@ std::string SocketFnameIterator::GetNext() {
     return ret;
 }
 
-void SocketFnameIterator::Recurse() {
+void SocketFnameIterator::Start() {
     thread_ = std::thread([this]() {
         auto fts = MakeUnique(fts_open(directories_, FTS_NOCHDIR, nullptr),
                               &fts_close);
