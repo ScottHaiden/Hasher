@@ -114,7 +114,7 @@ ArgResults ParseArgs(int argc, char* const* argv) {
     static constexpr char kDefaultHash[] = "sha512";
     ArgResults ret = {
         .fn = nullptr,
-        .num_threads = -1,
+        .num_threads = 1,
         .index = 0,
         .report_all_errors = false,
         .hash_fn = &kDefaultHash[0],
@@ -123,7 +123,7 @@ ArgResults ParseArgs(int argc, char* const* argv) {
 
     while (true) {
         switch (getopt(argc, argv, "chrspt:TeEC:R")) {
-            case 'T': ret.num_threads = -1;           continue;
+            case 'T': ret.num_threads = 0;           continue;
             case 'c': ret.fn = &CheckHash;            continue;
             case 'p': ret.fn = &PrintHash;            continue;
             case 'r': ret.fn = &ResetHash;            continue;
@@ -140,7 +140,7 @@ ArgResults ParseArgs(int argc, char* const* argv) {
         break;
     }
     ret.index = optind;
-    if (ret.num_threads < 0) ret.num_threads = sysconf(_SC_NPROCESSORS_ONLN);
+    if (ret.num_threads <= 0) ret.num_threads = sysconf(_SC_NPROCESSORS_ONLN);
     if (ret.fn) return ret;
 
     char* const fname = basename(*argv);
