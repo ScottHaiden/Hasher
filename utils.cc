@@ -113,6 +113,8 @@ int SocketFnameIterator::rfd() const { return socket_fds_[0]; }
 int SocketFnameIterator::wfd() const { return socket_fds_[1]; }
 }
 
+FnameIterator::~FnameIterator() = default;
+
 // static
 std::unique_ptr<FnameIterator> FnameIterator::GetInstance(
         bool recurse, char** args) {
