@@ -96,18 +96,20 @@ struct ArgResults {
 };
 
 void ShowHelp(char* progname) {
-    printf("%s [-c] [-h] [-r] [-s] [-t NUM] [-T]\n", progname);
+    printf("%s [-c] [-h] [-r] [-s] [-p] [-t NUM] [-T] [-e] [-E] [-C hashname] filenames..."
+           "[-R] [filenames...]\n", progname);
     printf("\n");
-    printf("\t-h:     Show this help\n");
-    printf("\t-c:     Check hashes\n");
-    printf("\t-C:     Set hash function\n");
-    printf("\t-r:     Reset hashes (remove hash from file's metadata)\n");
-    printf("\t-s:     Set hash (find hash and set it in file's metadata)\n");
-    printf("\t-p:     Print hash (create a checksum file)\n");
-    printf("\t-t NUM: Use NUM threads\n");
-    printf("\t-T:     Use default number of threads (1 per CPU core)\n");
-    printf("\t-e:     Report all errors (even missing data errors)\n");
-    printf("\t-E:     Only report error if found a file with a bad hash.\n");
+    printf("\t-c:      Check hashes\n");
+    printf("\t-h:      Show this help\n");
+    printf("\t-r:      Reset hashes (remove hash from file's metadata)\n");
+    printf("\t-s:      Set hash (Find file's hash and set it in files metadata)\n");
+    printf("\t-p:      Print hash (create a checksum file)\n");
+    printf("\t-t NUM:  Use NUM threads\n");
+    printf("\t-T:      Use one worker thread per CPU\n");
+    printf("\t-e:      Report all errors (even missing data errors)\n");
+    printf("\t-E:      Only report error if a file has a bad hash\n");
+    printf("\t-C NAME: Set hashing function to NAME. (default=sha512)\n");
+    printf("\t-R:      Operate recursively over directories.\n");
 }
 
 ArgResults ParseArgs(int argc, char* const* argv) {
