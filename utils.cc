@@ -70,8 +70,12 @@ std::string AtomicFnameIterator::GetNext() {
 void AtomicFnameIterator::Start() {}
 
 SocketFnameIterator::~SocketFnameIterator() {
-    if (!thread_.joinable()) return;
-    thread_.join();
+    if (thread_.joinable()) {
+        thread_.join();
+        return;
+    } 
+    if (close(wfd())) DIE("close wfd");
+    if (close(rfd())) DIE("close rfd");
 }
 
 SocketFnameIterator::SocketFnameIterator(char** directories)
