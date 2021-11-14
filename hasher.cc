@@ -158,6 +158,7 @@ int main(int argc, char* argv[]) {
 
     auto iterator =
         FnameIterator::GetInstance(results.recurse, &argv[results.index]);
+    if (!iterator) return 1;
     iterator->Start();
 
     std::vector<std::thread> workers;

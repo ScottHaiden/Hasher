@@ -23,7 +23,7 @@ char** DefaultDirectories() {
     return kDirectories;
 }
 
-class AtomicFnameIterator : public FnameIterator {
+class AtomicFnameIterator final : public FnameIterator {
   public:
     ~AtomicFnameIterator() override;
     AtomicFnameIterator(char** first);
@@ -35,12 +35,14 @@ class AtomicFnameIterator : public FnameIterator {
     std::atomic<char**> cur_;
 };
 
-class SocketFnameIterator : public FnameIterator {
+class SocketFnameIterator final : public FnameIterator {
   public:
     ~SocketFnameIterator() override;
     explicit SocketFnameIterator(char** directories);
     std::string GetNext() override;
     void Start() override;
+
+    bool CheckDirectories() const;
 
   private:
     int rfd() const;
@@ -67,14 +69,17 @@ std::string AtomicFnameIterator::GetNext() {
 
 void AtomicFnameIterator::Start() {}
 
-SocketFnameIterator::~SocketFnameIterator() { thread_.join(); }
+SocketFnameIterator::~SocketFnameIterator() {
+    if (!thread_.joinable()) return;
+    thread_.join();
+}
 
 SocketFnameIterator::SocketFnameIterator(char** directories)
     : directories_(*directories ? directories : DefaultDirectories()),
       socket_fds_([]() {
-        int fds[2];
-        if (socketpair(AF_UNIX, SOCK_SEQPACKET, 0, fds)) DIE("socketpair");
-        return std::array<int, 2>{fds[0], fds[1]};
+        std::array<int, 2> r;
+        if (socketpair(AF_UNIX, SOCK_SEQPACKET, 0, r.data())) DIE("socketpair");
+        return r;
       }()) {}
 
 std::string SocketFnameIterator::GetNext() {
@@ -109,6 +114,18 @@ void SocketFnameIterator::Start() {
         if (close(wfd())) DIE("close");
     });
 }
+
+bool SocketFnameIterator::CheckDirectories() const {
+    for (char** dir = directories_; *dir; ++dir) {
+        struct stat sb;
+        if (stat(*dir, &sb)) DIE("stat failed");
+        if (S_ISDIR(sb.st_mode)) continue;
+        WriteLocked(stderr, "%s is not a directory.\n", *dir);
+        return false;
+    }
+    return true;
+}
+
 int SocketFnameIterator::rfd() const { return socket_fds_[0]; }
 int SocketFnameIterator::wfd() const { return socket_fds_[1]; }
 }
@@ -118,6 +135,10 @@ FnameIterator::~FnameIterator() = default;
 // static
 std::unique_ptr<FnameIterator> FnameIterator::GetInstance(
         bool recurse, char** args) {
-    if (recurse) return std::make_unique<SocketFnameIterator>(args);
+    if (recurse) {
+        auto ret = std::make_unique<SocketFnameIterator>(args);
+        if (!ret->CheckDirectories()) return nullptr;
+        return ret;
+    }
     return std::make_unique<AtomicFnameIterator>(args);
 }
