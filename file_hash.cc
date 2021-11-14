@@ -119,6 +119,7 @@ int FileHash::ClearHashXattr() const {
     LOCAL_STRING(attrname, "user.hash.%s", hash_name_.data());
     if (fremovexattr(fd_, attrname)) {
         if (errno == ENODATA) return 1;
+        if (errno == EACCES) return 1;
         DIE("fremovexattr");
     }
     return 0;
