@@ -22,16 +22,6 @@ FileHash::~FileHash() {
     if (fd_ < 0) return;
     if (close(fd_) < 0) DIE("close");
 }
-FileHash::FileHash(FileHash&& other) { *this = std::move(other); }
-FileHash& FileHash::operator=(FileHash&& other) {
-    file_name_ = std::move(other.file_name_);
-    hash_name_ = std::move(other.hash_name_);
-    fd_ = other.fd_;
-    hash_ = std::move(other.hash_);
-
-    other.fd_ = -1;
-    return *this;
-}
 FileHash::FileHash(std::string_view file_name, std::string_view hash_name)
     : file_name_(file_name),
       hash_name_(hash_name),
@@ -42,10 +32,7 @@ FileHash::FileHash(std::string_view file_name, std::string_view hash_name)
   }
 }
 
-FileHash&& FileHash::HashFileContents() && {
-    return std::move(HashFileContents());
-}
-FileHash& FileHash::HashFileContents() & {
+FileHash& FileHash::HashFileContents() {
     const auto [file_data, file_len] = Mmap(fd_);
 
     auto* const md = EVP_get_digestbyname(hash_name_.data());
@@ -62,10 +49,7 @@ FileHash& FileHash::HashFileContents() & {
     return *this;
 }
 
-FileHash&& FileHash::ReadFileHashXattr() && {
-    return std::move(ReadFileHashXattr());
-}
-FileHash& FileHash::ReadFileHashXattr() & {
+FileHash& FileHash::ReadFileHashXattr() {
     LOCAL_STRING(attrname, "user.hash.%s", hash_name_.data());
 
     const ssize_t expected_size = fgetxattr(fd_, attrname, nullptr, 0);
