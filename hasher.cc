@@ -13,7 +13,7 @@
 
 #include "common.h"
 #include "utils.h"
-#include "file_hash.h"
+#include "file.h"
 
 enum class HashStatus : unsigned {
     OK = 0,
@@ -35,50 +35,58 @@ void Worker(
 }
 
 HashStatus ApplyHash(std::string_view fname, std::string_view hashname) {
-    auto file = FileHash(fname, hashname).ReadFileHashXattr();
-    if (!file.HashRaw().empty()) {
-        WriteLocked(stderr, "skipping %s (already has hash)\n", fname.data());
+    auto file = File::Create(fname, hashname);
+    if (file->GetHashMetadata()) {
+        WriteLocked(stderr, "Skipping %s (already has hash)\n", fname.data());
         return HashStatus::ERROR;
     }
 
-    auto fresh = std::move(file).HashFileContents();
-    if (fresh.SetHashXattr()) {
+    auto fresh = file->HashFileContents();
+    if (!fresh) {
+        WriteLocked(stderr, "Failed to hash file contents for %s\n", fname.data());
+        return HashStatus::ERROR;
+    }
+    if (file->UpdateHashMetadata(*fresh) != HashResult::OK) {
         WriteLocked(stderr, "Failed to write xattr to %s\n", fname.data());
         return HashStatus::ERROR;
     }
-    WriteLocked(stdout, "%s  %s\n", fresh.HashString().data(), fname.data());
+    WriteLocked(stdout, "%s  %s\n",
+                File::hash_to_string(*fresh).c_str(), fname.data());
     return HashStatus::OK;
 }
 
 HashStatus CheckHash(std::string_view fname, std::string_view hashname) {
-    auto xattr_file = FileHash(fname, hashname).ReadFileHashXattr();
-    if (xattr_file.HashRaw().empty()) {
+    auto xattr_file = File::Create(fname, hashname);
+    const auto from_xattr = xattr_file->GetHashMetadata();
+    if (!from_xattr) {
         WriteLocked(stdout, "skipping %s (missing hash)\n", fname.data());
         return HashStatus::ERROR;
     }
-    const auto rawhash = xattr_file.HashRaw();
-
-    auto actual = std::move(xattr_file).HashFileContents();
-    if (actual.HashRaw() == rawhash) {
+    const auto from_contents = xattr_file->HashFileContents();
+    if (!from_contents) {
+        WriteLocked(stderr, "Failed to hash %s\n", fname.data());
+        return HashStatus::ERROR;
+    }
+    if (*from_xattr == *from_contents) {
         WriteLocked(stdout, "%s: OK\n", fname.data());
         return HashStatus::OK;
     }
-
+    
     WriteLocked(stdout, "%s: FAILED\n", fname.data());
     return HashStatus::MISMATCH;
 }
 
 HashStatus PrintHash(std::string_view fname, std::string_view hashname) {
-    auto xattr_file = FileHash(fname, hashname).ReadFileHashXattr();
-    if (xattr_file.HashRaw().empty()) return HashStatus::ERROR;
-
-    WriteLocked(stdout, "%s  %s\n", xattr_file.HashString().data(), fname.data());
+    auto hash = File::Create(fname, hashname)->GetHashMetadata();
+    if (!hash) return HashStatus::ERROR;
+    WriteLocked(stdout, "%s  %s\n",
+                File::hash_to_string(*hash).c_str(), fname.data());
     return HashStatus::OK;
 }
 
 HashStatus ResetHash(std::string_view fname, std::string_view hashname) {
-    FileHash file(fname, hashname);
-    if (file.ClearHashXattr()) {
+    auto file = File::Create(fname, hashname);
+    if (file->RemoveHashMetadata() != HashResult::OK) {
         WriteLocked(stderr, "Failed to reset hash on %s\n", fname.data());
         return HashStatus::ERROR;
     }

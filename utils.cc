@@ -99,12 +99,12 @@ std::string SocketFnameIterator::GetNext() {
 
 void SocketFnameIterator::Start() {
     thread_ = std::thread([this]() {
-        auto fts = MakeUnique(fts_open(directories_, FTS_NOCHDIR, nullptr),
-                              &fts_close);
+        auto* const fts = fts_open(directories_, FTS_NOCHDIR, nullptr);
         if (fts == nullptr) DIE("fts_open");
+        const Cleanup closer([fts]() { fts_close(fts); });
 
         while (true) {
-            auto* const cur = fts_read(fts.get());
+            auto* const cur = fts_read(fts);
             if (cur == nullptr) break;
             if (!S_ISREG(cur->fts_statp->st_mode)) continue;
             const size_t len = strlen(cur->fts_path);
