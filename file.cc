@@ -20,7 +20,7 @@
 namespace {
 std::optional<std::string_view> load_file(std::string_view path) {
     const std::string str(path);
-    const int fd = open(str.c_str(), O_RDONLY);
+    const int fd = open(str.c_str(), O_RDONLY|O_NOATIME);
 
     const Cleanup closer([fd]() { close(fd); });
 
