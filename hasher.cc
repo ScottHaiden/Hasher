@@ -40,6 +40,11 @@ HashStatus ApplyHash(std::string_view fname, std::string_view hashname) {
         WriteLocked(stderr, "Skipping %s (already has hash)\n", fname.data());
         return HashStatus::ERROR;
     }
+    if (!file->is_accessible(true)) {
+        WriteLocked(stderr, "Skipping %s (insufficient permissions)\n",
+                fname.data());
+        return HashStatus::ERROR;
+    }
 
     auto fresh = file->HashFileContents();
     if (!fresh) {
@@ -57,6 +62,11 @@ HashStatus ApplyHash(std::string_view fname, std::string_view hashname) {
 
 HashStatus CheckHash(std::string_view fname, std::string_view hashname) {
     auto xattr_file = File::Create(fname, hashname);
+    if (!xattr_file->is_accessible(false)) {
+        WriteLocked(stderr, "Skipping %s (insufficient permissions)\n",
+                    fname.data());
+        return HashStatus::ERROR;
+    }
     const auto from_xattr = xattr_file->GetHashMetadata();
     if (!from_xattr) {
         WriteLocked(stdout, "skipping %s (missing hash)\n", fname.data());
@@ -77,7 +87,13 @@ HashStatus CheckHash(std::string_view fname, std::string_view hashname) {
 }
 
 HashStatus PrintHash(std::string_view fname, std::string_view hashname) {
-    auto hash = File::Create(fname, hashname)->GetHashMetadata();
+    auto file = File::Create(fname, hashname);
+    if (!file->is_accessible(false)) {
+        WriteLocked(stderr, "Skipping %s (insufficient permissions)\n",
+                    fname.data());
+        return HashStatus::ERROR;
+    }
+    const auto hash = file->GetHashMetadata();
     if (!hash) return HashStatus::ERROR;
     WriteLocked(stdout, "%s  %s\n",
                 File::hash_to_string(*hash).c_str(), fname.data());
@@ -86,6 +102,11 @@ HashStatus PrintHash(std::string_view fname, std::string_view hashname) {
 
 HashStatus ResetHash(std::string_view fname, std::string_view hashname) {
     auto file = File::Create(fname, hashname);
+    if (!file->is_accessible(true)) {
+        WriteLocked(stderr, "Skipping %s (insufficient permissions)\n",
+                    fname.data());
+        return HashStatus::ERROR;
+    }
     if (file->RemoveHashMetadata() != HashResult::OK) {
         WriteLocked(stderr, "Failed to reset hash on %s\n", fname.data());
         return HashStatus::ERROR;

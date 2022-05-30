@@ -48,6 +48,7 @@ class FileImpl final : public File {
 
   std::optional<std::vector<uint8_t>> GetHashMetadata() override;
   std::optional<std::vector<uint8_t>> HashFileContents() override;
+  bool is_accessible(bool write) override;
   HashResult UpdateHashMetadata(const std::vector<uint8_t>& value) override;
   HashResult RemoveHashMetadata() override;
 
@@ -81,6 +82,11 @@ std::optional<std::vector<uint8_t>> FileImpl::HashFileContents() {
 
     buf.resize(md_len);
     return buf;
+}
+
+bool FileImpl::is_accessible(bool write) {
+    const int amode = R_OK | (write ? W_OK : 0);
+    return access(path_.c_str(), amode) == 0;
 }
 
 std::optional<std::vector<uint8_t>> FileImpl::GetHashMetadata() {
