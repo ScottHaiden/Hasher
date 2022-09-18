@@ -21,7 +21,7 @@ class File {
   virtual ~File();
   virtual std::optional<std::vector<uint8_t>> GetHashMetadata() = 0;
   virtual std::optional<std::vector<uint8_t>> HashFileContents() = 0;
-  virtual bool is_accessible(bool write);
+  virtual bool is_accessible(bool write) = 0;
 
   virtual HashResult UpdateHashMetadata(const std::vector<uint8_t>& value) = 0;
   virtual HashResult RemoveHashMetadata() = 0;
