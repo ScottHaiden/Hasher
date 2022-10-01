@@ -5,7 +5,6 @@
 #include <stdint.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
-#include <sys/xattr.h>
 #include <unistd.h>
 
 #include <memory>
@@ -15,12 +14,21 @@
 #include <utility>
 #include <vector>
 
+#include "xattr.h"
 #include "common.h"
 
 namespace {
+constexpr int kOFlags =
+#if defined(__FreeBSD__)
+    O_RDONLY
+#elif defined(__linux__)
+    O_RDONLY|O_NOATIME
+#endif
+    ;
+
 std::optional<std::string_view> load_file(std::string_view path) {
     const std::string str(path);
-    const int fd = open(str.c_str(), O_RDONLY|O_NOATIME);
+    const int fd = open(str.c_str(), kOFlags);
 
     const Cleanup closer([fd]() { close(fd); });
 
@@ -90,38 +98,38 @@ bool FileImpl::is_accessible(bool write) {
 }
 
 std::optional<std::vector<uint8_t>> FileImpl::GetHashMetadata() {
-    LOCAL_STRING(attrname, "user.hash.%s", hashname_.c_str());
+    LOCAL_STRING(attrname, "hash.%s", hashname_.c_str());
 
     std::vector<uint8_t> buf(EVP_MAX_MD_SIZE);
-    const ssize_t actual =
-        getxattr(path_.c_str(), attrname, buf.data(), buf.size());
-
-    if (actual < 0) {
-        if (errno == ENODATA) return std::nullopt;
+    size_t size = buf.size();
+    if (get_attr(path_.c_str(), attrname, buf.data(), &size) < 0) {
         DIE("getxattr");
     }
 
-    buf.resize(actual);
+    if (!size) return std::nullopt;
+
+    buf.resize(size);
     return buf;
 }
 
 HashResult FileImpl::UpdateHashMetadata(const std::vector<uint8_t>& value) {
-    LOCAL_STRING(attrname, "user.hash.%s", hashname_.c_str());
+    LOCAL_STRING(attrname, "hash.%s", hashname_.c_str());
     const auto* const converted = reinterpret_cast<const char*>(value.data());
-    if (setxattr(path_.c_str(), attrname, converted, value.size(), 0)) {
-        if (errno != EACCES) DIE("setxattr(%s)");
-        return HashResult::Error;
-    }
-    return HashResult::OK;
+    const int result =
+        set_attr(path_.c_str(), attrname, converted, value.size());
+    if (result < 0) DIE("set_attr");
+    if (result > 0) return HashResult::OK;
+    return HashResult::Error;
 }
 
 HashResult FileImpl::RemoveHashMetadata() {
-    LOCAL_STRING(attrname, "user.hash.%s", hashname_.c_str());
-    if (removexattr(path_.c_str(), attrname)) {
+    LOCAL_STRING(attrname, "hash.%s", hashname_.c_str());
+    if (remove_attr(path_.c_str(), attrname)) {
         if (errno == ENODATA) return HashResult::Error;
         if (errno == EACCES) return HashResult::Error;
-        DIE("removexattr");
+        DIE("remove_attr");
     }
+    const int res = remove_attr(path_.c_str(), attrname);
     return HashResult::OK;
 }
 }

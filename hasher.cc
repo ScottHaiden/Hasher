@@ -7,13 +7,17 @@
 #include <thread>
 #include <unistd.h>
 #include <vector>
-
 #include <sys/socket.h>
 #include <sys/wait.h>
 
 #include "common.h"
 #include "utils.h"
 #include "file.h"
+
+#if defined(__FreeBSD__)
+#include <libgen.h>
+#endif
+
 
 enum class HashStatus : unsigned {
     OK = 0,
