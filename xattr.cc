@@ -25,14 +25,14 @@ int set_attr(const char* path, const char* name,
              const void* value, size_t size) {
     const int ret =
         extattr_set_file(path, EXTATTR_NAMESPACE_USER, name, value, size);
-    if (ret > 0) return ret;
-    if (errno == EACCES) return 0;
+    if (ret >= 0) return 0;
+    if (errno == EACCES) return 1;
     return -1;
 }
 
 int remove_attr(const char* path, const char* name) {
     const int ret = extattr_delete_file(path, EXTATTR_NAMESPACE_USER, name);
-    if (ret == 0) return 1;
+    if (ret == 0) return 0;
     if (errno == ENOATTR) return 0;
     if (errno == EACCES) return 0;
     return -1;
