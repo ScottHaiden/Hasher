@@ -14,21 +14,14 @@
 #include <utility>
 #include <vector>
 
-#include "xattr.h"
+#include "platform.h"
 #include "common.h"
 
 namespace {
-constexpr int kOFlags =
-#if defined(__FreeBSD__)
-    O_RDONLY
-#elif defined(__linux__)
-    O_RDONLY|O_NOATIME
-#endif
-    ;
 
 std::optional<std::string_view> load_file(std::string_view path) {
     const std::string str(path);
-    const int fd = open(str.c_str(), kOFlags);
+    const int fd = open(str.c_str(), open_flags());
 
     const Cleanup closer([fd]() { close(fd); });
 

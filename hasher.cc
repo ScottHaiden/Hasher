@@ -13,11 +13,7 @@
 #include "common.h"
 #include "utils.h"
 #include "file.h"
-
-#if defined(__FreeBSD__)
-#include <libgen.h>
-#endif
-
+#include "platform.h"
 
 enum class HashStatus : unsigned {
     OK = 0,
@@ -178,7 +174,7 @@ ArgResults ParseArgs(int argc, char* const* argv) {
     if (ret.num_threads <= 0) ret.num_threads = sysconf(_SC_NPROCESSORS_ONLN);
     if (ret.fn) return ret;
 
-    char* const fname = basename(*argv);
+    char* const fname = platform_basename(*argv);
     if (!strcmp(fname, "hasher")) ret.fn = &ApplyHash;
     if (!strcmp(fname, "checker")) ret.fn = &CheckHash;
 

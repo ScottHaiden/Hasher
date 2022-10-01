@@ -1,10 +1,12 @@
-#include "xattr.h"
+#include "platform.h"
 
 #if defined(__FreeBSD__)
 
 #include <sys/types.h>
-#include <sys/extattr.h>
 #include <errno.h>
+#include <fcntl.h>
+#include <sys/extattr.h>
+#include <libgen.h>
 
 int get_attr(const char* path, const char* name,
                  void* value, size_t* size) {
@@ -38,10 +40,15 @@ int remove_attr(const char* path, const char* name) {
     return -1;
 }
 
+int open_flags() { return O_RDONLY; }
+
+char* platform_basename(char* path) { return basename(path); }
+
 #elif defined(__linux__)
 
-#include <sys/xattr.h>
 #include <errno.h>
+#include <fcntl.h>
+#include <sys/xattr.h>
 
 #include "common.h"
 
@@ -75,6 +82,10 @@ int remove_attr(const char* path, const char* name) {
     if (errno == EACCES) return 0;
     return -1;
 }
+
+int open_flags() { return O_RDONLY | O_NOATIME; }
+
+char* platform_basename(char* path) { return basename(path); }
 
 #else
 #  error "Not compiling on a known OS."
