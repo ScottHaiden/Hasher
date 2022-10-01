@@ -121,13 +121,10 @@ HashResult FileImpl::UpdateHashMetadata(const std::vector<uint8_t>& value) {
 
 HashResult FileImpl::RemoveHashMetadata() {
     LOCAL_STRING(attrname, "hash.%s", hashname_.c_str());
-    if (remove_attr(path_.c_str(), attrname)) {
-        if (errno == ENODATA) return HashResult::Error;
-        if (errno == EACCES) return HashResult::Error;
-        DIE("remove_attr");
-    }
-    const int res = remove_attr(path_.c_str(), attrname);
-    return HashResult::OK;
+    const int result = remove_attr(path_.c_str(), attrname);
+    if (result == 0) return HashResult::OK;
+    if (result > 0) return HashResult::Error;
+    DIE("remove_attr");
 }
 }
 
