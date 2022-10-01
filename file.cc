@@ -102,12 +102,9 @@ std::optional<std::vector<uint8_t>> FileImpl::GetHashMetadata() {
 
     std::vector<uint8_t> buf(EVP_MAX_MD_SIZE);
     size_t size = buf.size();
-    if (get_attr(path_.c_str(), attrname, buf.data(), &size) < 0) {
-        DIE("getxattr");
-    }
-
-    if (!size) return std::nullopt;
-
+    const int attr_result = get_attr(path_.c_str(), attrname, buf.data(), &size);
+    if (attr_result < 0) DIE("getxattr");
+    if (attr_result > 0) return std::nullopt;
     buf.resize(size);
     return buf;
 }
@@ -117,8 +114,8 @@ HashResult FileImpl::UpdateHashMetadata(const std::vector<uint8_t>& value) {
     const auto* const converted = reinterpret_cast<const char*>(value.data());
     const int result =
         set_attr(path_.c_str(), attrname, converted, value.size());
+    if (result == 0) return HashResult::OK;
     if (result < 0) DIE("set_attr");
-    if (result > 0) return HashResult::OK;
     return HashResult::Error;
 }
 
