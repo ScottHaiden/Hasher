@@ -6,7 +6,6 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <sys/extattr.h>
-#include <libgen.h>
 
 int get_attr(const char* path, const char* name,
                  void* value, size_t* size) {
@@ -41,8 +40,6 @@ int remove_attr(const char* path, const char* name) {
 }
 
 int open_flags() { return O_RDONLY; }
-
-char* platform_basename(char* path) { return basename(path); }
 
 #elif defined(__linux__)
 
@@ -84,8 +81,6 @@ int remove_attr(const char* path, const char* name) {
 }
 
 int open_flags() { return O_RDONLY | O_NOATIME; }
-
-char* platform_basename(char* path) { return basename(path); }
 
 #else
 #  error "Not compiling on a known OS."

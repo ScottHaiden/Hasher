@@ -23,6 +23,3 @@ int remove_attr(const char* path, const char* name);
 // Returns the flags to be used to open files. This can differ by platform
 // depending on what open flags are supported.
 int open_flags();
-
-// see man 3 basename
-char* platform_basename(char* path);
