@@ -195,13 +195,14 @@ int main(int argc, char* argv[]) {
     workers.reserve(results.num_threads);
     std::atomic<unsigned> result;
 
-    for (unsigned i = 0; i < results.num_threads; ++i) {
+    for (unsigned i = 1; i < results.num_threads; ++i) {
         workers.emplace_back(&Worker,
                              iterator.get(),
                              results.hash_fn,
                              results.fn,
                              &result);
     }
+    Worker(iterator.get(), results.hash_fn, results.fn, &result);
 
     for (auto& thread : workers) thread.join();
 
