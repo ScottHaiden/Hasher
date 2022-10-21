@@ -16,6 +16,7 @@
 #pragma once
 
 #include <string>
+#include <memory>
 
 class FnameIterator {
   public:
