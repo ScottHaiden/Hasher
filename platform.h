@@ -17,8 +17,7 @@
 
 #include <stddef.h>
 
-// Get an extended file attribute from path. stores the size in size.
-// Returns 0 if the attribute does not exist; <0 on error, >0 on success.
+// Get an extended file attribute from path. Stores the size in size.
 //
 // Returns 0 on succes.
 // Returns <0 if unexpected system error.
