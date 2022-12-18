@@ -76,6 +76,13 @@ HashStatus ApplyHash(std::string_view fname, std::string_view hashname) {
     return HashStatus::OK;
 }
 
+HashStatus HasHash(std::string_view fname, std::string_view hashname) {
+    auto file = File::Create(fname, hashname);
+    if (file->GetHashMetadata()) return HashStatus::OK;
+    WriteLocked(stdout, "%s\n", fname.data());
+    return HashStatus::MISMATCH;
+}
+
 HashStatus CheckHash(std::string_view fname, std::string_view hashname) {
     auto xattr_file = File::Create(fname, hashname);
     if (!xattr_file->is_accessible(false)) {
@@ -169,12 +176,13 @@ ArgResults ParseArgs(int argc, char* const* argv) {
     };
 
     while (true) {
-        switch (getopt(argc, argv, "chrspt:TeEC:R")) {
-            case 'T': ret.num_threads = 0;           continue;
+        switch (getopt(argc, argv, "chrspt:TeEC:RH")) {
+            case 'T': ret.num_threads = 0;            continue;
             case 'c': ret.fn = &CheckHash;            continue;
             case 'p': ret.fn = &PrintHash;            continue;
             case 'r': ret.fn = &ResetHash;            continue;
             case 's': ret.fn = &ApplyHash;            continue;
+            case 'H': ret.fn = &HasHash;              continue;
             case 'R': ret.recurse = true;             continue;
             case 'C': ret.hash_fn = optarg;           continue;
             case 't': ret.num_threads = atoi(optarg); continue;
