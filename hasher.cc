@@ -78,7 +78,7 @@ HashStatus ApplyHash(std::string_view fname, const HashList& hashnames) {
     }
 
     HashStatus ret = HashStatus::OK;
-    auto contents = file->Load();
+    std::optional<std::unique_ptr<MappedFile>> contents;
     for (auto hashname : hashnames) {
         if (file->GetHashMetadata(hashname)) {
             WriteLocked(stderr, "Skipping %s (already has %s hash)\n",
@@ -87,8 +87,8 @@ HashStatus ApplyHash(std::string_view fname, const HashList& hashnames) {
             ret = HashStatusMax(ret, HashStatus::ERROR);
             continue;
         }
-        auto fresh = contents->HashContents(hashname);
-        const auto result = file->SetHashMetadata(hashname, fresh);
+        if (!contents.has_value()) contents = file->Load();
+        auto fresh = contents->get()->HashContents(hashname);
         if (file->SetHashMetadata(hashname, fresh) != HashResult::OK) {
             WriteLocked(stderr, "Failed to write xattr to %s\n",
                                 std::string(fname).c_str());
