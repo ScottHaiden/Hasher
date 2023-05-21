@@ -37,113 +37,188 @@ enum class HashStatus : unsigned {
     ERROR = (1 << 1),
 };
 
+unsigned HashStatusToUnsigned(HashStatus a) {
+    switch (a) {
+        case HashStatus::OK: return 0;
+        case HashStatus::MISMATCH: return 1;
+        case HashStatus::ERROR: return 2;
+    }
+    QUIT("Unhandled case in %s (%u)\n", __func__, static_cast<unsigned>(a));
+}
+
+HashStatus HashStatusMax(HashStatus a, HashStatus b) {
+    const unsigned a_int = static_cast<unsigned>(a);
+    const unsigned b_int = static_cast<unsigned>(b);
+    if (a_int >= b_int) return a;
+    return b;
+}
+
+using HashList = std::vector<std::string_view>;
+
 void Worker(
         FnameIterator* iterator,
-        std::string_view hashname,
+        const HashList& hashnames,
         const std::function<HashStatus(std::string_view,
-                                       std::string_view)>& task,
+                                       const HashList&)>& task,
         std::atomic<unsigned>* ret) {
     while (true) {
         const std::string cur = iterator->GetNext();
         if (cur.empty()) break;
-        *ret |= static_cast<unsigned>(task(cur, hashname));
+        *ret |= HashStatusToUnsigned(task(cur, hashnames));
     }
 }
 
-HashStatus ApplyHash(std::string_view fname, std::string_view hashname) {
-    auto file = File::Create(fname, hashname);
-    if (file->GetHashMetadata()) {
-        WriteLocked(stderr, "Skipping %s (already has hash)\n", fname.data());
-        return HashStatus::ERROR;
-    }
+HashStatus ApplyHash(std::string_view fname, const HashList& hashnames) {
+    const bool print_name = hashnames.size() > 1;
+    auto file = File::Create(fname);
     if (!file->is_accessible(true)) {
         WriteLocked(stderr, "Skipping %s (insufficient permissions)\n",
-                fname.data());
+                std::string(fname).c_str());
         return HashStatus::ERROR;
     }
 
-    auto fresh = file->HashFileContents();
-    if (!fresh) {
-        WriteLocked(stderr, "Failed to hash file contents for %s\n", fname.data());
-        return HashStatus::ERROR;
+    HashStatus ret = HashStatus::OK;
+    auto contents = file->Load();
+    for (auto hashname : hashnames) {
+        if (file->GetHashMetadata(hashname)) {
+            WriteLocked(stderr, "Skipping %s (already has %s hash)\n",
+                                std::string(fname).c_str(),
+                                std::string(hashname).c_str());
+            ret = HashStatusMax(ret, HashStatus::ERROR);
+            continue;
+        }
+        auto fresh = contents->HashContents(hashname);
+        const auto result = file->SetHashMetadata(hashname, fresh);
+        if (file->SetHashMetadata(hashname, fresh) != HashResult::OK) {
+            WriteLocked(stderr, "Failed to write xattr to %s\n",
+                                std::string(fname).c_str());
+            ret = HashStatusMax(ret, HashStatus::ERROR);
+        }
+        if (print_name) {
+            WriteLocked(stdout, "%s [%10s] %s\n",
+                                HashToString(fresh).c_str(),
+                                std::string(hashname).c_str(),
+                                std::string(fname).c_str());
+        } else {
+            WriteLocked(stdout, "%s  %s\n",
+                                HashToString(fresh).c_str(),
+                                std::string(fname).c_str());
+        }
     }
-    if (file->UpdateHashMetadata(*fresh) != HashResult::OK) {
-        WriteLocked(stderr, "Failed to write xattr to %s\n", fname.data());
-        return HashStatus::ERROR;
-    }
-    WriteLocked(stdout, "%s  %s\n",
-                File::hash_to_string(*fresh).c_str(), fname.data());
-    return HashStatus::OK;
+    return ret;
 }
 
-HashStatus HasHash(std::string_view fname, std::string_view hashname) {
-    auto file = File::Create(fname, hashname);
-    if (file->GetHashMetadata()) return HashStatus::OK;
-    WriteLocked(stdout, "%s\n", fname.data());
-    return HashStatus::MISMATCH;
+HashStatus HasHash(std::string_view fname, const HashList& hashnames) {
+    const bool print_name = hashnames.size() > 1;
+    auto file = File::Create(fname);
+
+    HashStatus ret = HashStatus::OK;
+    for (const auto hashname : hashnames) {
+        if (file->GetHashMetadata(hashname)) continue;
+        ret = HashStatusMax(ret, HashStatus::MISMATCH);
+    }
+
+    if (ret == HashStatus::MISMATCH) {
+        WriteLocked(stdout, "%s\n", std::string(fname).c_str());
+    }
+    return ret;
 }
 
-HashStatus CheckHash(std::string_view fname, std::string_view hashname) {
-    auto xattr_file = File::Create(fname, hashname);
-    if (!xattr_file->is_accessible(false)) {
-        WriteLocked(stderr, "Skipping %s (insufficient permissions)\n",
-                    fname.data());
-        return HashStatus::ERROR;
-    }
-    const auto from_xattr = xattr_file->GetHashMetadata();
-    if (!from_xattr) {
-        WriteLocked(stdout, "skipping %s (missing hash)\n", fname.data());
-        return HashStatus::ERROR;
-    }
-    const auto from_contents = xattr_file->HashFileContents();
-    if (!from_contents) {
-        WriteLocked(stderr, "Failed to hash %s\n", fname.data());
-        return HashStatus::ERROR;
-    }
-    if (*from_xattr == *from_contents) {
-        WriteLocked(stdout, "%s: OK\n", fname.data());
-        return HashStatus::OK;
-    }
-    
-    WriteLocked(stdout, "%s: FAILED\n", fname.data());
-    return HashStatus::MISMATCH;
-}
+HashStatus CheckHash(std::string_view fname, const HashList& hashnames) {
+    const bool print_name = hashnames.size() > 1;
+    auto file = File::Create(fname);
 
-HashStatus PrintHash(std::string_view fname, std::string_view hashname) {
-    auto file = File::Create(fname, hashname);
     if (!file->is_accessible(false)) {
         WriteLocked(stderr, "Skipping %s (insufficient permissions)\n",
-                    fname.data());
+                            std::string(fname).c_str());
         return HashStatus::ERROR;
     }
-    const auto hash = file->GetHashMetadata();
-    if (!hash) return HashStatus::ERROR;
-    WriteLocked(stdout, "%s  %s\n",
-                File::hash_to_string(*hash).c_str(), fname.data());
-    return HashStatus::OK;
+
+    std::optional<std::unique_ptr<MappedFile>> mapped;
+    HashStatus ret = HashStatus::OK;
+    for (const auto hashname : hashnames) {
+        const auto from_attr = file->GetHashMetadata(hashname);
+        if (!from_attr) {
+            WriteLocked(stdout, "skipping %s (missing %s hash)\n",
+                                std::string(fname).c_str(),
+                                std::string(hashname).c_str());
+            ret = HashStatusMax(ret, HashStatus::ERROR);
+            continue;
+        }
+        if (!mapped.has_value()) mapped = file->Load();
+        const auto from_contents = mapped->get()->HashContents(hashname);
+
+        if (*from_attr != from_contents) {
+            WriteLocked(stdout, "%s: %s FAILED\n",
+                                std::string(fname).c_str(),
+                                std::string(hashname).c_str());
+            ret = HashStatusMax(ret, HashStatus::MISMATCH);
+            continue;
+        }
+        WriteLocked(stdout, "%s: %s OK\n", std::string(fname).c_str(),
+                                           std::string(hashname).c_str());
+    }
+    return ret;
 }
 
-HashStatus ResetHash(std::string_view fname, std::string_view hashname) {
-    auto file = File::Create(fname, hashname);
+HashStatus PrintHash(std::string_view fname, const HashList& hashnames) {
+    const bool print_name = hashnames.size() > 1;
+
+    auto file = File::Create(fname);
+    if (!file->is_accessible(false)) {
+        WriteLocked(stderr, "Skipping %s (insufficient permissions)\n",
+                            std::string(fname).c_str());
+        return HashStatus::ERROR;
+    }
+    HashStatus ret = HashStatus::OK;
+    for (const auto hashname : hashnames) {
+        const auto hash = file->GetHashMetadata(hashname);
+        if (!hash) {
+            ret = HashStatusMax(ret, HashStatus::ERROR);
+            continue;
+        }
+        if (print_name) {
+            WriteLocked(stdout, "%s [%10s] %s\n",
+                                HashToString(*hash).c_str(),
+                                std::string(hashname).c_str(),
+                                std::string(fname).c_str());
+        } else {
+            WriteLocked(stdout, "%s  %s\n",
+                                HashToString(*hash).c_str(),
+                                std::string(fname).c_str());
+        }
+    }
+    return ret;
+}
+
+HashStatus ResetHash(std::string_view fname, const HashList& hashnames) {
+    auto file = File::Create(fname);
     if (!file->is_accessible(true)) {
         WriteLocked(stderr, "Skipping %s (insufficient permissions)\n",
-                    fname.data());
+                            std::string(fname).c_str());
         return HashStatus::ERROR;
     }
-    if (file->RemoveHashMetadata() != HashResult::OK) {
-        WriteLocked(stderr, "Failed to reset hash on %s\n", fname.data());
-        return HashStatus::ERROR;
+    HashStatus ret = HashStatus::OK;
+    for (const auto hashname :hashnames) {
+        if (file->RemoveHashMetadata(hashname) != HashResult::OK) {
+            WriteLocked(stderr, "Failed to reset %s hash on %s\n",
+                    std::string(hashname).c_str(),
+                    std::string(fname).c_str());
+            ret = HashStatusMax(ret, HashStatus::ERROR);
+        }
+        WriteLocked(stdout, "Resetting %s hash on %s\n",
+                            std::string(hashname).c_str(),
+                            std::string(fname).c_str());
     }
-    WriteLocked(stdout, "Resetting hash on %s\n", fname.data());
-    return HashStatus::OK;
+    return ret;
 }
 
 struct ArgResults {
-    HashStatus (*fn)(std::string_view, std::string_view);
+    HashStatus (*fn)(std::string_view, const HashList&);
     int num_threads;
     int index;
     bool report_all_errors;
-    const char* hash_fn;
+    std::vector<std::string_view> hash_fns;
     bool recurse;
 };
 
@@ -166,13 +241,13 @@ void ShowHelp(char* progname) {
 }
 
 ArgResults ParseArgs(int argc, char* const* argv) {
-    static constexpr char kDefaultHash[] = "sha512";
+    const std::vector<std::string_view> kDefaultHashes{"sha512", "blake2b512"};
     ArgResults ret = {
         .fn = nullptr,
         .num_threads = 1,
         .index = 0,
         .report_all_errors = false,
-        .hash_fn = &kDefaultHash[0],
+        .hash_fns = {},
         .recurse = false,
     };
 
@@ -185,7 +260,7 @@ ArgResults ParseArgs(int argc, char* const* argv) {
             case 's': ret.fn = &ApplyHash;            continue;
             case 'H': ret.fn = &HasHash;              continue;
             case 'R': ret.recurse = true;             continue;
-            case 'C': ret.hash_fn = optarg;           continue;
+            case 'C': ret.hash_fns.push_back(optarg); continue;
             case 't': ret.num_threads = atoi(optarg); continue;
             case 'e': ret.report_all_errors = true;   continue;
             case 'E': ret.report_all_errors = false;  continue;
@@ -196,6 +271,7 @@ ArgResults ParseArgs(int argc, char* const* argv) {
         break;
     }
     ret.index = optind;
+    if (ret.hash_fns.empty()) ret.hash_fns = kDefaultHashes;
     if (ret.num_threads <= 0) ret.num_threads = sysconf(_SC_NPROCESSORS_ONLN);
     if (ret.fn) return ret;
 
@@ -222,11 +298,11 @@ int main(int argc, char* argv[]) {
     for (unsigned i = 1; i < results.num_threads; ++i) {
         workers.emplace_back(&Worker,
                              iterator.get(),
-                             results.hash_fn,
+                             results.hash_fns,
                              results.fn,
                              &result);
     }
-    Worker(iterator.get(), results.hash_fn, results.fn, &result);
+    Worker(iterator.get(), results.hash_fns, results.fn, &result);
 
     for (auto& thread : workers) thread.join();
 

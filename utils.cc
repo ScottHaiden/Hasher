@@ -161,3 +161,13 @@ std::unique_ptr<FnameIterator> FnameIterator::GetInstance(
     }
     return std::make_unique<AtomicFnameIterator>(args);
 }
+
+std::string HashToString(const std::vector<uint8_t>& bytes) {
+    std::string ret(bytes.size() * 2, '\0');
+    for (int i = 0; i < bytes.size(); ++i) {
+        char buf[3];
+        snprintf(buf, 3, "%02x", bytes[i]);
+        std::copy(&buf[0], &buf[sizeof(buf)], &ret[i * 2]);
+    }
+    return ret;
+}

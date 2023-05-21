@@ -33,14 +33,13 @@
 #include "common.h"
 
 namespace {
-
 std::optional<std::string_view> load_file(std::string_view path) {
     const std::string str(path);
     const int fd = open(str.c_str(), open_flags());
 
-    const Cleanup closer([fd]() { close(fd); });
-
     if (fd < 0) return std::nullopt;
+
+    const Cleanup closer([fd]() { close(fd); });
 
     struct stat buf;
     if (fstat(fd, &buf) < 0) return std::nullopt;
@@ -57,40 +56,30 @@ void unload_buffer(std::string_view buf) {
     munmap(data, buf.size());
 }
 
-class FileImpl final : public File {
- public:
-  FileImpl(std::string_view path, std::string_view hashname);
-  ~FileImpl() override;
+class MappedFileImpl final : public MappedFile {
+  public:
+    explicit MappedFileImpl(std::string_view contents);
 
-  std::optional<std::vector<uint8_t>> GetHashMetadata() override;
-  std::optional<std::vector<uint8_t>> HashFileContents() override;
-  bool is_accessible(bool write) override;
-  HashResult UpdateHashMetadata(const std::vector<uint8_t>& value) override;
-  HashResult RemoveHashMetadata() override;
+    ~MappedFileImpl() override;
+    std::vector<uint8_t> HashContents(std::string_view hash_name) override;
 
- private:
-  const std::string path_;
-  const std::string hashname_;
+  private:
+    const std::string_view contents_;
 };
 
-FileImpl::FileImpl(std::string_view path, std::string_view hashname)
-    : path_(path), hashname_(hashname) {}
+MappedFileImpl::MappedFileImpl(std::string_view contents)
+    : contents_(contents) {}
 
-FileImpl::~FileImpl() = default;
+MappedFileImpl::~MappedFileImpl() { unload_buffer(contents_); }
 
-std::optional<std::vector<uint8_t>> FileImpl::HashFileContents() {
-    auto* const md = EVP_get_digestbyname(hashname_.c_str());
-    if (!md) QUIT("not found");
-
-    auto maybe_contents(load_file(path_));
-    if (!maybe_contents) return std::nullopt;
-    const auto contents = std::move(maybe_contents).value();
-    const Cleanup cleanup([contents]() { unload_buffer(contents); });
+std::vector<uint8_t> MappedFileImpl::HashContents(std::string_view hash_name) {
+    auto* const md = EVP_get_digestbyname(std::string(hash_name).c_str());
+    if (!md) QUIT("hash type not found");
 
     auto* const ctx = EVP_MD_CTX_new();
     const Cleanup ctx_freer([ctx]() { EVP_MD_CTX_free(ctx); });
     EVP_DigestInit_ex(ctx, md, nullptr);
-    EVP_DigestUpdate(ctx, contents.data(), contents.size());
+    EVP_DigestUpdate(ctx, contents_.data(), contents_.size());
 
     std::vector<uint8_t> buf(EVP_MAX_MD_SIZE);
     unsigned md_len;
@@ -100,13 +89,36 @@ std::optional<std::vector<uint8_t>> FileImpl::HashFileContents() {
     return buf;
 }
 
+class FileImpl final : public File {
+  public:
+    explicit FileImpl(std::string_view path);
+
+    ~FileImpl() override;
+
+    bool is_accessible(bool write) override;
+
+    std::optional<std::vector<uint8_t>> GetHashMetadata(
+        std::string_view hash_name) override;
+    HashResult SetHashMetadata(std::string_view hash_name,
+                               const std::vector<uint8_t>& value) override;
+    HashResult RemoveHashMetadata(std::string_view hash_name) override;
+    std::unique_ptr<MappedFile> Load() override;
+
+  private:
+    const std::string path_;
+};
+
+FileImpl::~FileImpl() = default;
+FileImpl::FileImpl(std::string_view path) : path_(path) {}
+
 bool FileImpl::is_accessible(bool write) {
     const int amode = R_OK | (write ? W_OK : 0);
     return access(path_.c_str(), amode) == 0;
 }
 
-std::optional<std::vector<uint8_t>> FileImpl::GetHashMetadata() {
-    LOCAL_STRING(attrname, "hash.%s", hashname_.c_str());
+std::optional<std::vector<uint8_t>> FileImpl::GetHashMetadata(
+        std::string_view hash_name) {
+    LOCAL_STRING(attrname, "hash.%s", std::string(hash_name).c_str());
 
     std::vector<uint8_t> buf(EVP_MAX_MD_SIZE);
     size_t size = buf.size();
@@ -117,41 +129,45 @@ std::optional<std::vector<uint8_t>> FileImpl::GetHashMetadata() {
     return buf;
 }
 
-HashResult FileImpl::UpdateHashMetadata(const std::vector<uint8_t>& value) {
-    LOCAL_STRING(attrname, "hash.%s", hashname_.c_str());
+HashResult FileImpl::SetHashMetadata(std::string_view hash_name,
+                           const std::vector<uint8_t>& value) {
+    LOCAL_STRING(attrname, "hash.%s", std::string(hash_name).c_str());
     const auto* const converted = reinterpret_cast<const char*>(value.data());
-    const int result =
-        set_attr(path_.c_str(), attrname, converted, value.size());
+    const int result = set_attr(
+            path_.c_str(), attrname, converted, value.size());
     if (result == 0) return HashResult::OK;
     if (result < 0) DIE("set_attr");
     return HashResult::Error;
 }
 
-HashResult FileImpl::RemoveHashMetadata() {
-    LOCAL_STRING(attrname, "hash.%s", hashname_.c_str());
+HashResult FileImpl::RemoveHashMetadata(std::string_view hash_name) {
+    LOCAL_STRING(attrname, "hash.%s", std::string(hash_name).c_str());
     const int result = remove_attr(path_.c_str(), attrname);
     if (result == 0) return HashResult::OK;
     if (result > 0) return HashResult::Error;
     DIE("remove_attr");
 }
+
+std::unique_ptr<MappedFile> FileImpl::Load() {
+    if (!this->is_accessible(false)) return nullptr;
+    return MappedFile::Create(path_);
 }
 
+}
+
+MappedFile::~MappedFile() = default;
 File::~File() = default;
 
 // static
-std::unique_ptr<File> File::Create(std::string_view path,
-                                   std::string_view hashname) {
-    return std::make_unique<FileImpl>(path, hashname);
+std::unique_ptr<MappedFile> MappedFile::Create(std::string_view path) {
+    auto maybe_mapped = load_file(path);
+    if (!maybe_mapped.has_value()) {
+        return std::make_unique<MappedFileImpl>(std::string_view());
+    }
+    return std::make_unique<MappedFileImpl>(std::move(maybe_mapped).value());
 }
 
 // static
-std::string File::hash_to_string(const std::vector<uint8_t>& bytes) {
-    std::string ret(bytes.size() * 2, '\0');
-    for (int i = 0; i < bytes.size(); ++i) {
-        char buf[3];
-        snprintf(buf, 3, "%02x", bytes[i]);
-        std::copy(&buf[0], &buf[sizeof(buf)], &ret[i * 2]);
-    }
-    return ret;
+std::unique_ptr<File> File::Create(std::string_view path) {
+    return std::make_unique<FileImpl>(path);
 }
-

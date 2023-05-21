@@ -18,6 +18,8 @@
 #include <string>
 #include <memory>
 
+std::string HashToString(const std::vector<uint8_t>& bytes);
+
 class FnameIterator {
   public:
     static std::unique_ptr<FnameIterator> GetInstance(bool recurse,

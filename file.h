@@ -17,27 +17,38 @@
 
 #include <stdint.h>
 
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string_view>
 #include <vector>
+#include <variant>
 
 enum class HashResult : int {
     OK = 0,
     Error,
 };
 
+class MappedFile {
+ public: 
+  static std::unique_ptr<MappedFile> Create(std::string_view path);
+
+  virtual ~MappedFile();
+  virtual std::vector<uint8_t> HashContents(std::string_view hash_name) = 0;
+};
+
 class File {
  public:
-  static std::unique_ptr<File> Create(
-          std::string_view path, std::string_view hashname);
-  static std::string hash_to_string(const std::vector<uint8_t>& hash);
-
+  static std::unique_ptr<File> Create(std::string_view path);
   virtual ~File();
-  virtual std::optional<std::vector<uint8_t>> GetHashMetadata() = 0;
-  virtual std::optional<std::vector<uint8_t>> HashFileContents() = 0;
+
   virtual bool is_accessible(bool write) = 0;
 
-  virtual HashResult UpdateHashMetadata(const std::vector<uint8_t>& value) = 0;
-  virtual HashResult RemoveHashMetadata() = 0;
+  virtual std::optional<std::vector<uint8_t>> GetHashMetadata(
+      std::string_view hash_name) = 0;
+  virtual HashResult SetHashMetadata(
+      std::string_view hash_name, const std::vector<uint8_t>& value) = 0;
+  virtual HashResult RemoveHashMetadata(std::string_view hash_name) = 0;
+
+  virtual std::unique_ptr<MappedFile> Load() = 0;
 };
