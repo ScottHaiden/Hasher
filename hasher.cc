@@ -269,26 +269,26 @@ ArgResults ParseArgs(int argc, char* const* argv) {
 
     while (true) {
         switch (getopt(argc, argv, "chrspt:TeEC:RH")) {
-            case 'T': ret.num_threads = 0;                continue;
-            case 'c': ret.fn = &CheckHash;                continue;
-            case 'p': ret.fn = &PrintHash;                continue;
-            case 'r': ret.fn = &ResetHash;                continue;
-            case 's': ret.fn = &ApplyHash;                continue;
-            case 'H': ret.fn = &HasHash;                  continue;
-            case 'R': ret.recurse = true;                 continue;
-            case 'C': ret.hash_fns.push_back(optarg);     continue;
-            case 't': ret.num_threads = ParseInt(optarg); continue;
-            case 'e': ret.report_all_errors = true;       continue;
-            case 'E': ret.report_all_errors = false;      continue;
-            case 'h': ShowHelp(argv[0]); exit(0);         break;
-            case -1:                                      break;
+            case 'T': ret.num_threads = -1;                continue;
+            case 'c': ret.fn = &CheckHash;                 continue;
+            case 'p': ret.fn = &PrintHash;                 continue;
+            case 'r': ret.fn = &ResetHash;                 continue;
+            case 's': ret.fn = &ApplyHash;                 continue;
+            case 'H': ret.fn = &HasHash;                   continue;
+            case 'R': ret.recurse = true;                  continue;
+            case 'C': ret.hash_fns.push_back(optarg);      continue;
+            case 't': ret.num_threads = ParseInt(optarg);  continue;
+            case 'e': ret.report_all_errors = true;        continue;
+            case 'E': ret.report_all_errors = false;       continue;
+            case 'h': ShowHelp(argv[0]); exit(0);          break;
+            case -1:                                       break;
             default: exit(1);
         }
         break;
     }
     ret.index = optind;
     if (ret.hash_fns.empty()) ret.hash_fns = kDefaultHashes;
-    if (ret.num_threads && ret.num_threads <= 0) ret.num_threads = sysconf(_SC_NPROCESSORS_ONLN);
+    if (ret.num_threads <= 0) ret.num_threads = sysconf(_SC_NPROCESSORS_ONLN);
     if (ret.fn) return ret;
 
     char* const fname = basename(*argv);
