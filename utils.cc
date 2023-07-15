@@ -149,7 +149,7 @@ int SocketFnameIterator::rfd() const { return socket_fds_[0]; }
 int SocketFnameIterator::wfd() const { return socket_fds_[1]; }
 
 std::array<char, 2> ascii_byte(uint8_t byte) {
-    std::array<char, 2> bytes[] = {
+    static const std::array<char, 2> bytes[] = {
         {'0', '0'}, {'0', '1'}, {'0', '2'}, {'0', '3'}, {'0', '4'}, {'0', '5'},
         {'0', '6'}, {'0', '7'}, {'0', '8'}, {'0', '9'}, {'0', 'a'}, {'0', 'b'},
         {'0', 'c'}, {'0', 'd'}, {'0', 'e'}, {'0', 'f'}, {'1', '0'}, {'1', '1'},
