@@ -23,8 +23,8 @@ LDFLAGS := -lcrypto -fpic -pie
 
 all: hasher
 
-hasher: hasher.cc file.o utils.o common.o platform.o
-	$(CXX) -o $@ hasher.cc file.o utils.o common.o platform.o $(CXXFLAGS) $(LDFLAGS) 
+hasher: hasher.o file.o utils.o common.o platform.o
+	$(CXX) -o $@ $^ $(CXXFLAGS) $(LDFLAGS)
 
 clean:
 	rm -f hasher *.o
