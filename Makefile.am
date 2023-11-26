@@ -4,5 +4,4 @@ hasher_CXXFLAGS = -O3 -fpic -pie -march=native -flto
 hasher_LDADD = $(LIBCRYPTO_LIBS)
 
 install-exec-hook:
-	cd $(DESTDIR)$(bindir) && \
-		$(LN_S) hasher checker
+	cd $(DESTDIR)$(bindir) && (test -L checker || $(LN_S) hasher checker)
