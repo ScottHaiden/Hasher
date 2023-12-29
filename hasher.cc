@@ -32,6 +32,12 @@
 #include "platform.h"
 
 namespace {
+const std::vector<std::string_view> DefaultHashes() {
+    constexpr static char kSha512[] = "sha512";
+    constexpr static char kBlake2b512[] = "blake2b512";
+    return {kSha512, kBlake2b512};
+}
+
 enum class HashStatus : unsigned {
     OK = 0,
     MISMATCH = (1 << 0),
@@ -239,10 +245,22 @@ struct ArgResults {
 };
 
 void ShowHelp(char* progname) {
+    const std::string default_hashes([]() -> std::string {
+        const auto hashes = DefaultHashes();
+        if (hashes.empty()) return "";
+
+        std::string ret(hashes[0]);
+        for (int i = 1; i < hashes.size(); ++i) {
+            ret += "," + std::string(hashes[i]);
+        }
+        return ret;
+    }());
+
     printf("%s [-c] [-h] [-r] [-s] [-p] [-t NUM] [-T] [-e] [-E] [-C hashname] "
            "[-R] filenames...\n", progname);
     printf("\n");
-    printf("\t-C NAME: Set hashing function to NAME. (default=sha512)\n");
+    printf("\t-C NAME: Set hashing function to NAME. (default=%s)\n",
+            default_hashes.c_str());
     printf("\t-E:      Only report error if a file has a bad hash\n");
     printf("\t-H:      Identify whether files have hashes\n");
     printf("\t-R:      Operate recursively over directories.\n");
@@ -257,7 +275,6 @@ void ShowHelp(char* progname) {
 }
 
 ArgResults ParseArgs(int argc, char* const* argv) {
-    const std::vector<std::string_view> kDefaultHashes{"sha512", "blake2b512"};
     ArgResults ret = {
         .fn = nullptr,
         .num_threads = 1,
@@ -287,7 +304,7 @@ ArgResults ParseArgs(int argc, char* const* argv) {
         break;
     }
     ret.index = optind;
-    if (ret.hash_fns.empty()) ret.hash_fns = kDefaultHashes;
+    if (ret.hash_fns.empty()) ret.hash_fns = DefaultHashes();
     if (ret.num_threads <= 0) ret.num_threads = sysconf(_SC_NPROCESSORS_ONLN);
     if (ret.fn) return ret;
 
