@@ -153,6 +153,63 @@ std::unique_ptr<MappedFile> FileImpl::Load() {
     return MappedFile::Create(path_);
 }
 
+class OpenFileImpl final : public OpenFile {
+ public:
+  OpenFileImpl(int fd);
+  ~OpenFileImpl() override;
+  std::unordered_map<std::string, std::vector<uint8_t>> HashContents(
+      std::span<std::string_view> hash_names) override;
+
+ private:
+  EVP_MD_CTX* get_hasher(std::string_view hashname);
+
+  const int fd_;
+};
+
+OpenFileImpl::OpenFileImpl(int fd) : fd_(fd) {}
+OpenFileImpl::~OpenFileImpl() { close(fd_); }
+
+std::unordered_map<std::string, std::vector<uint8_t>>
+OpenFileImpl::HashContents(std::span<std::string_view> hash_names) {
+  std::vector<std::pair<std::string, EVP_MD_CTX*>> hashers;
+  const Cleanup ctx_freer([&hashers]() {
+    for (auto& [unused_key, ptr] : hashers) EVP_MD_CTX_free(ptr);
+  });
+  for (const auto& hash_name : hash_names) {
+    hashers.push_back({std::string(hash_name), get_hasher(hash_name)});
+  }
+
+  while (true) {
+    char buf[4096];
+    const ssize_t amount = read(fd_, &buf[0], sizeof(buf));
+    if (amount < 0) DIE("read");
+    if (amount == 0) break;
+
+    for (auto& [hash_name, ctx] : hashers) {
+      EVP_DigestUpdate(ctx, &buf[0], amount);
+    }
+  }
+
+  std::unordered_map<std::string, std::vector<uint8_t>> ret;
+  for (auto& [hash_name, ctx] : hashers) {
+    std::vector<uint8_t> buf(EVP_MAX_MD_SIZE);
+    unsigned md_len;
+    EVP_DigestFinal_ex(ctx, buf.data(), &md_len);
+    buf.resize(md_len);
+    ret[hash_name] = std::move(buf);
+  }
+  return ret;
+}
+
+EVP_MD_CTX* OpenFileImpl::get_hasher(std::string_view hashname) {
+  auto* const md = EVP_get_digestbyname(std::string(hashname).c_str());
+  if (!md) QUIT("hash type not found");
+
+  auto* const ctx = EVP_MD_CTX_new();
+  EVP_DigestInit_ex(ctx, md, nullptr);
+
+  return ctx;
+}
 }
 
 MappedFile::~MappedFile() = default;
@@ -165,6 +222,14 @@ std::unique_ptr<MappedFile> MappedFile::Create(std::string_view path) {
         return std::make_unique<MappedFileImpl>(std::string_view());
     }
     return std::make_unique<MappedFileImpl>(std::move(maybe_mapped).value());
+}
+
+// static
+std::unique_ptr<OpenFile> OpenFile::Create(std::string_view path) {
+  const int fd = open(std::string(path).c_str(), open_flags());
+  if (fd < 0) return nullptr;
+
+  return std::make_unique<OpenFileImpl>(fd);
 }
 
 // static

@@ -20,9 +20,11 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string_view>
-#include <vector>
+#include <unordered_map>
 #include <variant>
+#include <vector>
 
 enum class HashResult : int {
     OK = 0,
@@ -35,6 +37,15 @@ class MappedFile {
 
   virtual ~MappedFile();
   virtual std::vector<uint8_t> HashContents(std::string_view hash_name) = 0;
+};
+
+class OpenFile {
+ public:
+  static std::unique_ptr<OpenFile> Create(std::string_view path);
+
+  virtual ~OpenFile();
+  virtual std::unordered_map<std::string, std::vector<uint8_t>> HashContents(
+      std::span<std::string_view> hash_names) = 0;
 };
 
 class File {
