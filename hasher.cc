@@ -14,10 +14,12 @@
 // Hasher. If not, see <https://www.gnu.org/licenses/>.
 
 #include <atomic>
+#include <algorithm>
 #include <iostream>
 #include <libgen.h>
 #include <mutex>
 #include <numeric>
+#include <span>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
@@ -100,30 +102,27 @@ HashStatus ApplyHash(std::string_view fname, const HashList& hashnames) {
     }
 
     HashStatus ret = HashStatus::OK;
-    std::optional<std::unique_ptr<MappedFile>> contents;
-    for (auto hashname : hashnames) {
-        if (file->GetHashMetadata(hashname)) {
-            WriteLocked(stderr, "Skipping %s (already has %s hash)\n",
-                                std::string(fname).c_str(),
-                                std::string(hashname).c_str());
-            ret = HashStatusMax(ret, HashStatus::ERROR);
-            continue;
-        }
-        if (!contents.has_value()) contents = file->Load();
-        auto fresh = contents->get()->HashContents(hashname);
-        if (file->SetHashMetadata(hashname, fresh) != HashResult::OK) {
+    std::unique_ptr<OpenFile> contents = file->Open();
+    if (!contents) {
+        WriteLocked(stderr, "Skipping %s (failed to open)\n",
+                std::string(fname).c_str());
+        return HashStatus::ERROR;
+    }
+    const auto hashes = contents->HashContents(std::span{hashnames});
+    for (auto& [hashname, value] : hashes) {
+        if (file->SetHashMetadata(hashname, value) != HashResult::OK) {
             WriteLocked(stderr, "Failed to write xattr to %s\n",
                                 std::string(fname).c_str());
             ret = HashStatusMax(ret, HashStatus::ERROR);
         }
         if (print_name) {
             WriteLocked(stdout, "%s [%10s] %s\n",
-                                HashToString(fresh).c_str(),
+                                HashToString(value).c_str(),
                                 std::string(hashname).c_str(),
                                 std::string(fname).c_str());
         } else {
             WriteLocked(stdout, "%s  %s\n",
-                                HashToString(fresh).c_str(),
+                                HashToString(value).c_str(),
                                 std::string(fname).c_str());
         }
     }
@@ -156,30 +155,49 @@ HashStatus CheckHash(std::string_view fname, const HashList& hashnames) {
         return HashStatus::ERROR;
     }
 
-    std::optional<std::unique_ptr<MappedFile>> mapped;
     HashStatus ret = HashStatus::OK;
-    for (const auto hashname : hashnames) {
-        const auto from_attr = file->GetHashMetadata(hashname);
-        if (!from_attr) {
-            WriteLocked(stdout, "skipping %s (missing %s hash)\n",
-                                std::string(fname).c_str(),
-                                std::string(hashname).c_str());
-            ret = HashStatusMax(ret, HashStatus::ERROR);
+    std::unordered_map<std::string, std::vector<uint8_t>> extant_hashes;
+    for (const auto& hashname : hashnames) {
+        auto extant = file->GetHashMetadata(hashname);
+        if (extant) {
+            extant_hashes[std::string(hashname)] = std::move(extant).value();
             continue;
         }
-        if (!mapped.has_value()) mapped = file->Load();
-        const auto from_contents = mapped->get()->HashContents(hashname);
+        WriteLocked(stdout, "Skipping %s (missing %s hash)\n",
+                    std::string(fname).c_str(),
+                    std::string(hashname).c_str());
+        ret = HashStatusMax(ret, HashStatus::ERROR);
+    }
+    if (extant_hashes.empty()) return ret;
 
-        if (*from_attr != from_contents) {
+    std::vector<std::string_view> extant_hashnames;
+    for (const auto& [key, val] : extant_hashes) {
+        extant_hashnames.push_back(key);
+    }
+
+    std::unique_ptr<OpenFile> opened = file->Open();
+    if (!opened) {
+        WriteLocked(stderr, "Failed to open %s when we thought we could.\n",
+                            std::string(fname).c_str());
+        return HashStatus::ERROR;
+    }
+    std::unordered_map<std::string, std::vector<uint8_t>> actual_hashes =
+        opened->HashContents(std::span(extant_hashnames));
+    for (const auto& hashname : extant_hashnames) {
+        const std::string hashname_str(hashname);
+        const auto& expected = extant_hashes[hashname_str];
+        const auto& actual = actual_hashes[hashname_str];
+        if (actual != expected) {
             WriteLocked(stdout, "%s: %s FAILED\n",
                                 std::string(fname).c_str(),
-                                std::string(hashname).c_str());
+                                hashname_str.c_str());
             ret = HashStatusMax(ret, HashStatus::MISMATCH);
             continue;
         }
         WriteLocked(stdout, "%s: %s OK\n", std::string(fname).c_str(),
                                            std::string(hashname).c_str());
     }
+
     return ret;
 }
 

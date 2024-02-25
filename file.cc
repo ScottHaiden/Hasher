@@ -103,6 +103,7 @@ class FileImpl final : public File {
                                const std::vector<uint8_t>& value) override;
     HashResult RemoveHashMetadata(std::string_view hash_name) override;
     std::unique_ptr<MappedFile> Load() override;
+    std::unique_ptr<OpenFile> Open() override;
 
   private:
     const std::string path_;
@@ -153,12 +154,17 @@ std::unique_ptr<MappedFile> FileImpl::Load() {
     return MappedFile::Create(path_);
 }
 
+std::unique_ptr<OpenFile> FileImpl::Open() {
+    if (!this->is_accessible(false)) return nullptr;
+    return OpenFile::Create(path_);
+}
+
 class OpenFileImpl final : public OpenFile {
  public:
   OpenFileImpl(int fd);
   ~OpenFileImpl() override;
   std::unordered_map<std::string, std::vector<uint8_t>> HashContents(
-      std::span<std::string_view> hash_names) override;
+      std::span<const std::string_view> hash_names) override;
 
  private:
   EVP_MD_CTX* get_hasher(std::string_view hashname);
@@ -170,7 +176,7 @@ OpenFileImpl::OpenFileImpl(int fd) : fd_(fd) {}
 OpenFileImpl::~OpenFileImpl() { close(fd_); }
 
 std::unordered_map<std::string, std::vector<uint8_t>>
-OpenFileImpl::HashContents(std::span<std::string_view> hash_names) {
+OpenFileImpl::HashContents(std::span<const std::string_view> hash_names) {
   std::vector<std::pair<std::string, EVP_MD_CTX*>> hashers;
   const Cleanup ctx_freer([&hashers]() {
     for (auto& [unused_key, ptr] : hashers) EVP_MD_CTX_free(ptr);
@@ -178,10 +184,9 @@ OpenFileImpl::HashContents(std::span<std::string_view> hash_names) {
   for (const auto& hash_name : hash_names) {
     hashers.push_back({std::string(hash_name), get_hasher(hash_name)});
   }
-
+  std::vector<char> buf(4 << 20, '\0');
   while (true) {
-    char buf[4096];
-    const ssize_t amount = read(fd_, &buf[0], sizeof(buf));
+    const ssize_t amount = read(fd_, &buf[0], buf.size());
     if (amount < 0) DIE("read");
     if (amount == 0) break;
 
@@ -213,6 +218,7 @@ EVP_MD_CTX* OpenFileImpl::get_hasher(std::string_view hashname) {
 }
 
 MappedFile::~MappedFile() = default;
+OpenFile::~OpenFile() = default;
 File::~File() = default;
 
 // static

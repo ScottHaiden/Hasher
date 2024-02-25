@@ -45,7 +45,7 @@ class OpenFile {
 
   virtual ~OpenFile();
   virtual std::unordered_map<std::string, std::vector<uint8_t>> HashContents(
-      std::span<std::string_view> hash_names) = 0;
+      std::span<const std::string_view> hash_names) = 0;
 };
 
 class File {
@@ -62,4 +62,5 @@ class File {
   virtual HashResult RemoveHashMetadata(std::string_view hash_name) = 0;
 
   virtual std::unique_ptr<MappedFile> Load() = 0;
+  virtual std::unique_ptr<OpenFile> Open() = 0;
 };
