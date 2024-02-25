@@ -1,4 +1,4 @@
-AC_INIT([hasher], [2023.11.25], [no.one@example.com])
+AC_INIT([hasher], [2024.02.25], [no.one@example.com])
 AM_INIT_AUTOMAKE([-Wall -Werror foreign])
 AC_CONFIG_FILES([Makefile])
 
