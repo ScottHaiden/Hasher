@@ -108,7 +108,22 @@ HashStatus ApplyHash(std::string_view fname, const HashList& hashnames) {
                 std::string(fname).c_str());
         return HashStatus::ERROR;
     }
-    const auto hashes = contents->HashContents(std::span{hashnames});
+
+    const HashList unknowns([&]() {
+        HashList ret;
+        for (const auto& name : hashnames) {
+            if (file->GetHashMetadata(name)) {
+                WriteLocked(stderr, "Skipping %s for %s (already has hash)\n",
+                            std::string(fname).c_str(),
+                            std::string(name).c_str());
+                continue;
+            }
+            ret.push_back(name);
+        }
+        return ret;
+    }());
+
+    const auto hashes = contents->HashContents(std::span{unknowns});
     for (auto& [hashname, value] : hashes) {
         if (file->SetHashMetadata(hashname, value) != HashResult::OK) {
             WriteLocked(stderr, "Failed to write xattr to %s\n",
