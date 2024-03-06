@@ -35,7 +35,7 @@
 namespace {
 std::optional<std::string_view> load_file(std::string_view path) {
     const std::string str(path);
-    const int fd = open(str.c_str(), open_flags());
+    const int fd = open(str.c_str(), open_flags(str.c_str()));
 
     if (fd < 0) return std::nullopt;
 
@@ -232,7 +232,8 @@ std::unique_ptr<MappedFile> MappedFile::Create(std::string_view path) {
 
 // static
 std::unique_ptr<OpenFile> OpenFile::Create(std::string_view path) {
-  const int fd = open(std::string(path).c_str(), open_flags());
+  const int oflags = open_flags(std::string(path).c_str());
+  const int fd = open(std::string(path).c_str(), oflags);
   if (fd < 0) return nullptr;
 
   return std::make_unique<OpenFileImpl>(fd);

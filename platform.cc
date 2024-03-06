@@ -54,13 +54,15 @@ int remove_attr(const char* path, const char* name) {
     return -1;
 }
 
-int open_flags() { return O_RDONLY; }
+int open_flags(const char* path) { return O_RDONLY; }
 
 #elif defined(__linux__)
 
 #include <errno.h>
 #include <fcntl.h>
+#include <sys/stat.h>
 #include <sys/xattr.h>
+#include <unistd.h>
 
 #include "common.h"
 
@@ -95,7 +97,13 @@ int remove_attr(const char* path, const char* name) {
     return -1;
 }
 
-int open_flags() { return O_RDONLY | O_NOATIME; }
+int open_flags(const char* path) {
+    const uid_t self = geteuid();
+    struct stat buf;
+    if (stat(path, &buf)) QUIT("Failed to stat %s\n", path);
+    if (self == buf.st_uid) return O_RDONLY | O_NOATIME;
+    return O_RDONLY;
+}
 
 #else
 #  error "Not compiling on a known OS."
