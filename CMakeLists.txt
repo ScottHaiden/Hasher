@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.28.3)
 project(Hasher)
 
 set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_FLAGS "-O3 -fpic -pie -flto ${CMAKE_CXX_FLAGS}")
 
 find_package(PkgConfig REQUIRED)
 pkg_search_module(CRYPTO libcrypto REQUIRED)
