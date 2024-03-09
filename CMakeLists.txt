@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.28.3)
+cmake_minimum_required(VERSION 3.18.4)
 
 project(Hasher)
 
@@ -10,6 +10,7 @@ pkg_search_module(CRYPTO libcrypto REQUIRED)
 
 add_executable(hasher hasher.cc)
 target_link_libraries(hasher ${CRYPTO_LIBRARIES})
+target_link_libraries(hasher pthread)
 
 add_library(common common.cc)
 target_link_libraries(hasher common)
