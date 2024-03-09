@@ -123,6 +123,8 @@ HashStatus ApplyHash(std::string_view fname, const HashList& hashnames) {
         return ret;
     }());
 
+    if (unknowns.empty()) return ret;
+
     const auto hashes = contents->HashContents(std::span{unknowns});
     for (auto& [hashname, value] : hashes) {
         if (file->SetHashMetadata(hashname, value) != HashResult::OK) {

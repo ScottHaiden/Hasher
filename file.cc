@@ -177,6 +177,7 @@ OpenFileImpl::~OpenFileImpl() { close(fd_); }
 
 std::unordered_map<std::string, std::vector<uint8_t>>
 OpenFileImpl::HashContents(std::span<const std::string_view> hash_names) {
+  if (hash_names.empty()) return {};
   std::vector<std::pair<std::string, EVP_MD_CTX*>> hashers;
   const Cleanup ctx_freer([&hashers]() {
     for (auto& [unused_key, ptr] : hashers) EVP_MD_CTX_free(ptr);
