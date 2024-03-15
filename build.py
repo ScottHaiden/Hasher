@@ -43,7 +43,7 @@ def objects(sources, headers):
 # --------------------------------------------------------------------
 @task(default=True)
 def executable(objects):
-    return compile(objects.components(), target="hasher", env=LINK_ENV)
+    return compile(objects, target="hasher", env=LINK_ENV)
 
 
 # --------------------------------------------------------------------
