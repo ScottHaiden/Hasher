@@ -23,3 +23,6 @@ target_link_libraries(hasher platform)
 
 add_library(utils utils.cc)
 target_link_libraries(hasher utils)
+
+install(TARGETS hasher DESTINATION bin)
+install(CODE "execute_process(COMMAND ${CMAKE_COMMAND} -E create_symlink hasher ${CMAKE_INSTALL_PREFIX}/bin/checker)")
