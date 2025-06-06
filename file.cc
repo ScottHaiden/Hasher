@@ -56,39 +56,6 @@ void unload_buffer(std::string_view buf) {
     munmap(data, buf.size());
 }
 
-class MappedFileImpl final : public MappedFile {
-  public:
-    explicit MappedFileImpl(std::string_view contents);
-
-    ~MappedFileImpl() override;
-    std::vector<uint8_t> HashContents(std::string_view hash_name) override;
-
-  private:
-    const std::string_view contents_;
-};
-
-MappedFileImpl::MappedFileImpl(std::string_view contents)
-    : contents_(contents) {}
-
-MappedFileImpl::~MappedFileImpl() { unload_buffer(contents_); }
-
-std::vector<uint8_t> MappedFileImpl::HashContents(std::string_view hash_name) {
-    auto* const md = EVP_get_digestbyname(std::string(hash_name).c_str());
-    if (!md) QUIT("hash type not found");
-
-    auto* const ctx = EVP_MD_CTX_new();
-    const Cleanup ctx_freer([ctx]() { EVP_MD_CTX_free(ctx); });
-    EVP_DigestInit_ex(ctx, md, nullptr);
-    EVP_DigestUpdate(ctx, contents_.data(), contents_.size());
-
-    std::vector<uint8_t> buf(EVP_MAX_MD_SIZE);
-    unsigned md_len;
-    EVP_DigestFinal_ex(ctx, buf.data(), &md_len);
-
-    buf.resize(md_len);
-    return buf;
-}
-
 class FileImpl final : public File {
   public:
     explicit FileImpl(std::string_view path);
@@ -102,7 +69,6 @@ class FileImpl final : public File {
     HashResult SetHashMetadata(std::string_view hash_name,
                                const std::vector<uint8_t>& value) override;
     HashResult RemoveHashMetadata(std::string_view hash_name) override;
-    std::unique_ptr<MappedFile> Load() override;
     std::unique_ptr<OpenFile> Open() override;
 
   private:
@@ -147,11 +113,6 @@ HashResult FileImpl::RemoveHashMetadata(std::string_view hash_name) {
     if (result == 0) return HashResult::OK;
     if (result > 0) return HashResult::Error;
     DIE("remove_attr");
-}
-
-std::unique_ptr<MappedFile> FileImpl::Load() {
-    if (!this->is_accessible(false)) return nullptr;
-    return MappedFile::Create(path_);
 }
 
 std::unique_ptr<OpenFile> FileImpl::Open() {
@@ -218,18 +179,8 @@ EVP_MD_CTX* OpenFileImpl::get_hasher(std::string_view hashname) {
 }
 }
 
-MappedFile::~MappedFile() = default;
 OpenFile::~OpenFile() = default;
 File::~File() = default;
-
-// static
-std::unique_ptr<MappedFile> MappedFile::Create(std::string_view path) {
-    auto maybe_mapped = load_file(path);
-    if (!maybe_mapped.has_value()) {
-        return std::make_unique<MappedFileImpl>(std::string_view());
-    }
-    return std::make_unique<MappedFileImpl>(std::move(maybe_mapped).value());
-}
 
 // static
 std::unique_ptr<OpenFile> OpenFile::Create(std::string_view path) {

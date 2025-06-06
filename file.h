@@ -31,14 +31,6 @@ enum class HashResult : int {
     Error,
 };
 
-class MappedFile {
- public: 
-  static std::unique_ptr<MappedFile> Create(std::string_view path);
-
-  virtual ~MappedFile();
-  virtual std::vector<uint8_t> HashContents(std::string_view hash_name) = 0;
-};
-
 class OpenFile {
  public:
   static std::unique_ptr<OpenFile> Create(std::string_view path);
@@ -61,6 +53,5 @@ class File {
       std::string_view hash_name, const std::vector<uint8_t>& value) = 0;
   virtual HashResult RemoveHashMetadata(std::string_view hash_name) = 0;
 
-  virtual std::unique_ptr<MappedFile> Load() = 0;
   virtual std::unique_ptr<OpenFile> Open() = 0;
 };
