@@ -7,9 +7,11 @@ set(CMAKE_CXX_FLAGS "-O3 -fpic -pie -flto ${CMAKE_CXX_FLAGS}")
 
 find_package(PkgConfig REQUIRED)
 pkg_search_module(CRYPTO libcrypto REQUIRED)
+pkg_search_module(FTS musl-fts OPTIONAL)
 
 add_executable(hasher hasher.cc)
 target_link_libraries(hasher ${CRYPTO_LIBRARIES})
+target_link_libraries(hasher ${FTS_LIBRARIES})
 target_link_libraries(hasher pthread)
 
 add_library(common OBJECT common.cc)
