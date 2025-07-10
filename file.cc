@@ -33,29 +33,6 @@
 #include "common.h"
 
 namespace {
-std::optional<std::string_view> load_file(std::string_view path) {
-    const std::string str(path);
-    const int fd = open(str.c_str(), open_flags(str.c_str()));
-
-    if (fd < 0) return std::nullopt;
-
-    const Cleanup closer([fd]() { close(fd); });
-
-    struct stat buf;
-    if (fstat(fd, &buf) < 0) return std::nullopt;
-    const size_t len = buf.st_size;
-
-    const void* const mem = mmap(nullptr, len, PROT_READ, MAP_PRIVATE, fd, 0);
-    if (mem == MAP_FAILED) return std::nullopt;
-
-    return std::string_view(static_cast<const char*>(mem), len);
-}
-
-void unload_buffer(std::string_view buf) {
-    auto* const data = const_cast<char*>(buf.data());
-    munmap(data, buf.size());
-}
-
 class FileImpl final : public File {
   public:
     explicit FileImpl(std::string_view path);
