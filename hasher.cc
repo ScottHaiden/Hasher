@@ -37,7 +37,8 @@ namespace {
 const std::vector<std::string_view> DefaultHashes() {
     constexpr static char kSha512[] = "sha512";
     constexpr static char kBlake2b512[] = "blake2b512";
-    return {kSha512, kBlake2b512};
+    constexpr static char kSha3_512[] = "sha3-512";
+    return {kBlake2b512, kSha3_512, kSha512};
 }
 
 enum class HashStatus : unsigned {
