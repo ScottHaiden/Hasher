@@ -148,7 +148,6 @@ HashStatus ApplyHash(std::string_view fname, const HashList& hashnames) {
 }
 
 HashStatus HasHash(std::string_view fname, const HashList& hashnames) {
-    const bool print_name = hashnames.size() > 1;
     auto file = File::Create(fname);
 
     HashStatus ret = HashStatus::OK;
@@ -164,7 +163,6 @@ HashStatus HasHash(std::string_view fname, const HashList& hashnames) {
 }
 
 HashStatus CheckHash(std::string_view fname, const HashList& hashnames) {
-    const bool print_name = hashnames.size() > 1;
     auto file = File::Create(fname);
 
     if (!file->is_accessible(false)) {
