@@ -276,6 +276,7 @@ struct ArgResults {
     bool report_all_errors;
     std::vector<std::string_view> hash_fns;
     bool recurse;
+    bool follow_links;
 };
 
 void ShowHelp(char* progname) {
@@ -306,6 +307,7 @@ void ShowHelp(char* progname) {
     printf("\n");
     printf("  File handling switches:\n");
     printf("    -R:      Operate recursively over directories.\n");
+    printf("    -L:      Follow symbolic links in recursive mode.\n");
     printf("\n");
     printf("  Error reporting switches:\n");
     printf("    -E:      Only report error if a file has a bad hash\n");
@@ -323,10 +325,11 @@ ArgResults ParseArgs(int argc, char* const* argv) {
         .report_all_errors = false,
         .hash_fns = {},
         .recurse = false,
+        .follow_links = false,
     };
 
     while (true) {
-        switch (getopt(argc, argv, "cprsHt:TRC:eEh")) {
+        switch (getopt(argc, argv, "cprsHt:TRLC:eEh")) {
             // Control the job.
             case 'c': ret.fn = &CheckHash; continue;
             case 'p': ret.fn = &PrintHash; continue;
@@ -341,8 +344,9 @@ ArgResults ParseArgs(int argc, char* const* argv) {
             // Control what hashes we work with.
             case 'C': ret.hash_fns.push_back(optarg); continue;
 
-            // Recursion
+            // File handling.
             case 'R': ret.recurse = true; continue;
+            case 'L': ret.follow_links = true; continue;
 
             // Error reporting.
             case 'e': ret.report_all_errors = true;  continue;
@@ -373,8 +377,8 @@ int main(int argc, char* argv[]) {
     auto results = ParseArgs(argc, &argv[0]);
     if (!results.fn) return 1;
 
-    auto iterator =
-        FnameIterator::GetInstance(results.recurse, &argv[results.index]);
+    auto iterator = FnameIterator::GetInstance(
+            results.recurse, results.follow_links, &argv[results.index]);
     if (!iterator) return 1;
     iterator->Start();
 

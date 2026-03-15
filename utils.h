@@ -22,8 +22,8 @@ std::string HashToString(const std::vector<uint8_t>& bytes);
 
 class FnameIterator {
   public:
-    static std::unique_ptr<FnameIterator> GetInstance(bool recurse,
-            char** args);
+    static std::unique_ptr<FnameIterator> GetInstance(
+            bool recurse, bool follow_links, char** args);
     virtual ~FnameIterator();
     virtual std::string GetNext() = 0;
     virtual void Start() = 0;

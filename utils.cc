@@ -53,7 +53,7 @@ class AtomicFnameIterator final : public FnameIterator {
 class SocketFnameIterator final : public FnameIterator {
   public:
     ~SocketFnameIterator() override;
-    explicit SocketFnameIterator(char** directories);
+    SocketFnameIterator(char** directories, bool follow_links);
     std::string GetNext() override;
     void Start() override;
 
@@ -64,6 +64,7 @@ class SocketFnameIterator final : public FnameIterator {
     int wfd() const;
 
     char** const directories_;
+    const bool follow_links_;
     const std::array<int, 2> socket_fds_;
 
     std::thread thread_;
@@ -93,8 +94,9 @@ SocketFnameIterator::~SocketFnameIterator() {
     }
 }
 
-SocketFnameIterator::SocketFnameIterator(char** directories)
+SocketFnameIterator::SocketFnameIterator(char** directories, bool follow_links)
     : directories_(*directories ? directories : DefaultDirectories()),
+      follow_links_(follow_links),
       socket_fds_([]() {
         std::array<int, 2> r;
         if (socketpair(AF_UNIX, SOCK_SEQPACKET, 0, r.data())) DIE("socketpair");
@@ -114,7 +116,8 @@ std::string SocketFnameIterator::GetNext() {
 
 void SocketFnameIterator::Start() {
     thread_ = std::thread([this]() {
-        auto* const fts = fts_open(directories_, FTS_NOCHDIR, nullptr);
+        const int flags = FTS_NOCHDIR | (follow_links_ ? FTS_LOGICAL : 0);
+        auto* const fts = fts_open(directories_, flags, nullptr);
         if (fts == nullptr) DIE("fts_open");
         const Cleanup closer([fts]() { fts_close(fts); });
 
@@ -202,13 +205,12 @@ FnameIterator::~FnameIterator() = default;
 
 // static
 std::unique_ptr<FnameIterator> FnameIterator::GetInstance(
-        bool recurse, char** args) {
-    if (recurse) {
-        auto ret = std::make_unique<SocketFnameIterator>(args);
-        if (!ret->CheckDirectories()) return nullptr;
-        return ret;
-    }
-    return std::make_unique<AtomicFnameIterator>(args);
+        bool recurse, bool follow_links, char** args) {
+    if (!recurse) return std::make_unique<AtomicFnameIterator>(args);
+
+    auto ret = std::make_unique<SocketFnameIterator>(args, follow_links);
+    if (!ret->CheckDirectories()) return nullptr;
+    return ret;
 }
 
 std::string HashToString(const std::vector<uint8_t>& bytes) {
