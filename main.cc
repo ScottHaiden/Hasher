@@ -294,11 +294,13 @@ void ShowHelp(char* progname) {
     printf("%s [-c] [-p] [-r] [-s] [-H] [-T] [-t NUM] [-C hashname] [-R] [-e] [-E] [-h] filenames...\n", progname);
     printf("\n");
     printf("  Task switches:\n");
-    printf("    -c:      Check hashes\n");
-    printf("    -p:      Print hash (create a checksum file)\n");
-    printf("    -r:      Reset hashes (remove hash from file's metadata)\n");
-    printf("    -s:      Set hash (Find file's hash and set it in files metadata)\n");
-    printf("    -H:      Identify whether files have hashes\n");
+    printf("    -c:      Check hashes from xattr metadata.\n");
+    printf("    -p:      Print hashes from xattr metadata.\n");
+    printf("    -r:      Reset hashes (remove hash from files' xattr metadata)\n");
+    printf("    -s:      Set hash (Find files' hash and set it in their xattr metadata)\n");
+    printf("    -H:      Print files without hashes\n");
+    printf("\n");
+    printf("  Thread Control:\n");
     printf("    -T:      Use one worker thread per CPU\n");
     printf("    -t NUM:  Use NUM threads\n");
     printf("\n");
