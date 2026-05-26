@@ -247,6 +247,41 @@ HashStatus PrintHash(std::string_view fname, const HashList& hashnames) {
     return ret;
 }
 
+HashStatus PrintOnly(std::string_view fname, const HashList& hashnames) {
+    const bool print_name = hashnames.size() > 1;
+
+    auto file = File::Create(fname);
+    if (!file->is_accessible(false)) {
+        WriteLocked(stderr, "Skipping %s (insufficient permissions)\n",
+                            std::string(fname).c_str());
+        return HashStatus::ERROR;
+    }
+    std::unique_ptr<OpenFile> opened = file->Open();
+    if (!opened) {
+        WriteLocked(stderr, "Failed to open %s when we thought we could.\n",
+                            std::string(fname).c_str());
+        return HashStatus::ERROR;
+    }
+    std::unordered_map<std::string, std::vector<uint8_t>> hashes =
+        opened->HashContents(std::span(hashnames));
+    for (const auto& [name, hash] : hashes) {
+        const std::string hashname_str(name);
+        const std::string value(HashToString(hash));
+        if (print_name) {
+            WriteLocked(stdout, "%s [%10s] %s\n",
+                                value.c_str(),
+                                std::string(name).c_str(),
+                                std::string(fname).c_str());
+        } else {
+            WriteLocked(stdout, "%s %s\n",
+                                value.c_str(),
+                                std::string(fname).c_str());
+        }
+    }
+
+    return HashStatus::OK;
+}
+
 HashStatus ResetHash(std::string_view fname, const HashList& hashnames) {
     auto file = File::Create(fname);
     if (!file->is_accessible(true)) {
@@ -296,6 +331,7 @@ void ShowHelp(char* progname) {
     printf("  Task switches:\n");
     printf("    -c:      Check hashes from xattr metadata.\n");
     printf("    -p:      Print hashes from xattr metadata.\n");
+    printf("    -P:      Hash file now and print the results only (don't check or update metadata).\n");
     printf("    -r:      Reset hashes (remove hash from files' xattr metadata)\n");
     printf("    -s:      Set hash (Find files' hash and set it in their xattr metadata)\n");
     printf("    -H:      Print files without hashes\n");
@@ -331,10 +367,11 @@ ArgResults ParseArgs(int argc, char* const* argv) {
     };
 
     while (true) {
-        switch (getopt(argc, argv, "cprsHt:TRLC:eEh")) {
+        switch (getopt(argc, argv, "cpPrsHt:TRLC:eEh")) {
             // Control the job.
             case 'c': ret.fn = &CheckHash; continue;
             case 'p': ret.fn = &PrintHash; continue;
+            case 'P': ret.fn = &PrintOnly; continue;
             case 'r': ret.fn = &ResetHash; continue;
             case 's': ret.fn = &ApplyHash; continue;
             case 'H': ret.fn = &HasHash;   continue;
