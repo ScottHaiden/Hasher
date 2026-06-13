@@ -250,7 +250,7 @@ HashStatus PrintOnly(std::string_view fname, const HashList& hashnames) {
         if (print_name) {
             WriteLocked(stdout, "{} [{:>10}] {}", value, name, fname);
         } else {
-            WriteLocked(stdout, "{} {}", value, fname);
+            WriteLocked(stdout, "{}  {}", value, fname);
         }
     }
 
