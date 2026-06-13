@@ -129,7 +129,7 @@ void SocketFnameIterator::Start() {
             const ssize_t written = write(wfd(), cur->fts_path, len);
             if (written < 0) DIE("write");
             if (written != len) {
-                QUIT("wrote wrong amount (%zu vs %zd)", written, len);
+                QUIT("wrote wrong amount ({} vs {})", written, len);
             }
         }
 
@@ -142,7 +142,7 @@ bool SocketFnameIterator::CheckDirectories() const {
         struct stat sb;
         if (stat(*dir, &sb)) DIE("stat failed");
         if (S_ISDIR(sb.st_mode)) continue;
-        WriteLocked(stderr, "%s is not a directory.\n", *dir);
+        WriteLocked(stderr, "{} is not a directory.", *dir);
         return false;
     }
     return true;

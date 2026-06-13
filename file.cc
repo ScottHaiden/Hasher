@@ -28,6 +28,7 @@
 #include <string_view>
 #include <utility>
 #include <vector>
+#include <format>
 
 #include "platform.h"
 #include "common.h"
@@ -62,11 +63,12 @@ bool FileImpl::is_accessible(bool write) {
 
 std::optional<std::vector<uint8_t>> FileImpl::GetHashMetadata(
         std::string_view hash_name) {
-    LOCAL_STRING(attrname, "hash.%s", std::string(hash_name).c_str());
-
     std::vector<uint8_t> buf(EVP_MAX_MD_SIZE);
     size_t size = buf.size();
-    const int attr_result = get_attr(path_.c_str(), attrname, buf.data(), &size);
+    const int attr_result = get_attr(path_.c_str(),
+                                     std::format("hash.{}", hash_name).c_str(),
+                                     buf.data(),
+                                     &size);
     if (attr_result < 0) DIE("getxattr");
     if (attr_result > 0) return std::nullopt;
     buf.resize(size);
@@ -75,18 +77,19 @@ std::optional<std::vector<uint8_t>> FileImpl::GetHashMetadata(
 
 HashResult FileImpl::SetHashMetadata(std::string_view hash_name,
                            const std::vector<uint8_t>& value) {
-    LOCAL_STRING(attrname, "hash.%s", std::string(hash_name).c_str());
     const auto* const converted = reinterpret_cast<const char*>(value.data());
-    const int result = set_attr(
-            path_.c_str(), attrname, converted, value.size());
+    const int result = set_attr(path_.c_str(),
+                                std::format("hash.{}", hash_name).c_str(),
+                                converted,
+                                value.size());
     if (result == 0) return HashResult::OK;
     if (result < 0) DIE("set_attr");
     return HashResult::Error;
 }
 
 HashResult FileImpl::RemoveHashMetadata(std::string_view hash_name) {
-    LOCAL_STRING(attrname, "hash.%s", std::string(hash_name).c_str());
-    const int result = remove_attr(path_.c_str(), attrname);
+    const int result = remove_attr(path_.c_str(),
+                                  std::format("hash.{}", hash_name).c_str());
     if (result == 0) return HashResult::OK;
     if (result > 0) return HashResult::Error;
     DIE("remove_attr");

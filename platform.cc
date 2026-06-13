@@ -64,11 +64,13 @@ int open_flags(const char* path) { return O_RDONLY; }
 #include <sys/xattr.h>
 #include <unistd.h>
 
+#include <format>
+
 #include "common.h"
 
 int get_attr(const char* path, const char* name, void* value, size_t* size) {
-    LOCAL_STRING(propname, "user.%s", name);
-    const int ret = getxattr(path, propname, value, *size);
+    const int ret = getxattr(
+            path, std::format("user.{}", name).c_str(), value, *size);
     if (ret >= 0) {
         *size = ret;
         return 0;
@@ -81,16 +83,15 @@ int get_attr(const char* path, const char* name, void* value, size_t* size) {
 }
 
 int set_attr(const char* path, const char* name, const void* value, size_t size) {
-    LOCAL_STRING(propname, "user.%s", name);
-    const int ret = setxattr(path, propname, value, size, 0);
+    const int ret = setxattr(
+            path, std::format("user.{}", name).c_str(), value, size, 0);
     if (ret == 0) return 0;
     if (errno == EACCES) return 1;
     return -1;
 }
 
 int remove_attr(const char* path, const char* name) {
-    LOCAL_STRING(propname, "user.%s", name);
-    const int ret = removexattr(path, propname);
+    const int ret = removexattr(path, std::format("user.{}", name).c_str());
     if (ret == 0) return 0;
     if (errno == ENODATA) return 0;
     if (errno == EACCES) return 0;
@@ -100,7 +101,7 @@ int remove_attr(const char* path, const char* name) {
 int open_flags(const char* path) {
     const uid_t self = geteuid();
     struct stat buf;
-    if (stat(path, &buf)) QUIT("Failed to stat %s\n", path);
+    if (stat(path, &buf)) QUIT("Failed to stat {}\n", path);
     if (self == buf.st_uid) return O_RDONLY | O_NOATIME;
     return O_RDONLY;
 }
